@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nebula – adaptive companion (embryo)</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg-0:#04050d; --bg-1:#080a1c; --glass-2:rgba(255,255,255,.045);
+    --line:rgba(176,186,255,.16); --line-2:rgba(176,186,255,.28);
+    --ink:#e7eaff; --ink-2:#a9afdb; --ink-3:#7479a6; --focus:#9fb4ff;
+    --violet:#a893ff; --teal:#5fe0d2;
+    --safe:#74e6ac; --risky:#ffbb55; --danger:#ee6f84; --sensitive:#ae96ff;
+    --r-s:10px; --r-m:13px; --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:14px;
+    /* ONE timing/easing pair drives the shell AND the avatar slot, so Nebula stays glued to Aurora while it morphs */
+    --ease-spring:cubic-bezier(.3,1.14,.45,1); --ease-out:cubic-bezier(.22,.8,.3,1); --t-morph:.6s; --t-fast:.16s; --t-fade:.28s;
+    --font:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,sans-serif; --mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:radial-gradient(110% 80% at 50% -10%,#10133a 0%,var(--bg-1) 45%,var(--bg-0) 100%);
+    color:var(--ink);font:13.5px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+  #fx{z-index:12}                      /* the single Nebula lives here, above the shell, clipped to it */
+  button,select{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:10px}
+
+  /* ═════════ Aurora shell: one glass element that morphs between modes ═════════ */
+  #dock{position:fixed;top:8px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:10}
+  .shell{--w:312px;--sl:7px;--st:5px;--ss:44px;position:relative;pointer-events:auto;overflow:hidden;overflow:clip;width:var(--w);height:54px;border-radius:27px;
+    background:linear-gradient(180deg,rgba(26,29,66,.7),rgba(12,14,34,.72));backdrop-filter:blur(20px) saturate(1.3);-webkit-backdrop-filter:blur(20px) saturate(1.3);
+    border:1px solid var(--line);box-shadow:0 12px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);
+    transition:width var(--t-morph) var(--ease-spring),height var(--t-morph) var(--ease-spring),border-radius var(--t-morph) var(--ease-spring),border-color var(--t-fade),box-shadow var(--t-fade)}
+  /* the avatar slot: an invisible box the canvas reads each frame to place Nebula */
+  #slot{position:absolute;left:var(--sl);top:var(--st);width:var(--ss);height:var(--ss);pointer-events:none;
+    transition:left var(--t-morph) var(--ease-spring),top var(--t-morph) var(--ease-spring),width var(--t-morph) var(--ease-spring),height var(--t-morph) var(--ease-spring)}
+  .shell[data-s=notch]{border-color:rgba(176,186,255,.3);box-shadow:0 0 16px -2px rgba(150,130,255,.5),0 0 28px -6px rgba(95,224,210,.35),0 6px 18px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08)}
+  body[data-pending=true] .shell[data-s=notch]{border-color:rgba(255,127,174,.6);box-shadow:0 0 16px -1px rgba(255,127,174,.6),0 6px 18px rgba(0,0,0,.45)}
+  .shell[data-s=attention]{border-color:var(--risk,var(--risky));
+    box-shadow:0 0 0 1px color-mix(in srgb,var(--risk,var(--risky)) 40%,transparent),0 0 30px -4px var(--risk,var(--risky)),0 16px 40px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.08)}
+  .layer{position:absolute;left:0;top:0;width:var(--w);opacity:0;pointer-events:none;transform:scale(.97);transform-origin:50% 0;
+    transition:opacity .1s linear,transform var(--t-morph) var(--ease-spring)}                /* outgoing layer leaves fast... */
+  .shell[data-s=notch] .l-notch,.shell[data-s=compact] .l-compact,.shell[data-s=activity] .l-activity,.shell[data-s=expanded] .l-expanded,.shell[data-s=attention] .l-attn{opacity:1;pointer-events:auto;transform:none;transition:opacity var(--t-fade) var(--ease-out) .09s,transform var(--t-morph) var(--ease-spring)}   /* ...incoming layer arrives just after */
+  .tw{position:absolute;width:3px;height:3px;border-radius:50%;background:#fff;box-shadow:0 0 6px 1px rgba(190,200,255,.9);opacity:0;pointer-events:none;animation:tw 9s infinite}
+  .tw.t1{left:34%;top:1px;animation-delay:1s}.tw.t2{left:68%;bottom:1px;animation-delay:4.2s}.tw.t3{right:12%;top:1px;animation-delay:6.5s}
+  @keyframes tw{0%,90%,100%{opacity:0;transform:scale(.4)}94%{opacity:1;transform:scale(1)}}
+  body[data-mode=notch] .tw{display:none}
+
+  /* notch */
+  .l-notch{height:56px}
+  .nmain{position:absolute;inset:0;background:none;border:0;padding:0;cursor:pointer;border-radius:28px}
+  .nind{position:absolute;right:9px;top:13px;width:30px;height:30px;display:flex;align-items:center;justify-content:center;gap:3px;border-radius:50%;background:none;border:0;padding:0;cursor:pointer;z-index:2;transition:opacity var(--t-fade)}
+  .nind[data-k=idle]{opacity:0;pointer-events:none}
+  .nind i,.act i{display:block;width:3px;height:5px;border-radius:2px;background:var(--ink-3);transition:background .3s,height .3s}
+  .nind[data-k=working] i,.act[data-k=working] i{background:#ffc766;animation:eq 1s ease-in-out infinite}
+  .nind[data-k=working] i:nth-child(2),.act[data-k=working] i:nth-child(2){animation-delay:.18s}.nind[data-k=working] i:nth-child(3),.act[data-k=working] i:nth-child(3){animation-delay:.36s}
+  @keyframes eq{0%,100%{height:4px}50%{height:13px}}
+  .nind[data-k=attention] i,.act[data-k=attention] i{background:#ff7fae;animation:pulse 1.1s infinite;height:9px}.nind[data-k=attention] i:nth-child(2),.act[data-k=attention] i:nth-child(2){height:13px}
+  .nind[data-k=done] i,.act[data-k=done] i{background:var(--safe);height:8px}.act[data-k=listening] i{background:var(--teal);height:8px}.act[data-k=sad] i{background:#8fa2ee}
+  @keyframes pulse{50%{opacity:.35}}
+  .act{display:flex;align-items:center;gap:3px;height:28px;padding:0 6px;flex:none;background:none;border:0;border-radius:8px;cursor:pointer}
+  .act:hover{background:rgba(176,186,255,.12)}
+
+  /* compact */
+  .l-compact{height:76px;display:flex;align-items:center;gap:4px;padding-right:8px}
+  .cmain{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:center;padding-left:82px;gap:1px;background:none;border:0;cursor:pointer;text-align:left;border-radius:38px 0 0 38px}
+  .crow{display:flex;align-items:center;gap:7px}
+  .title{font-weight:600;letter-spacing:.05em;font-size:13.5px;background:linear-gradient(90deg,#c6b9ff,#7bece0);-webkit-background-clip:text;background-clip:text;color:transparent;width:max-content}
+  .stat{font-size:11px;color:var(--ink-3)}
+  .msg{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .iconbtn{width:28px;height:28px;flex:none;display:grid;place-items:center;border-radius:50%;border:1px solid var(--line);background:var(--glass-2);cursor:pointer;transition:background var(--t-fast)}
+  .iconbtn:hover{background:rgba(176,186,255,.16)}
+  .ico{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  .badge{display:none;padding:0 7px;border-radius:999px;font-size:10.5px;font-weight:600;color:#3b0f24;background:#ff9fc4}
+  body[data-pending=true] .badge{display:inline-block}
+
+  /* shared header for activity / expanded */
+  .head{display:flex;align-items:center;gap:var(--sp-2);padding:9px 10px 0 0}
+  .head .grow{flex:1;min-width:0}
+  .l-activity .head{padding-left:80px;min-height:70px}
+  .l-expanded .head{padding-left:118px;min-height:100px;padding-top:10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:var(--glass-2);font-size:11px;color:var(--ink-2);white-space:nowrap}
+  .tag{padding:0 6px;border-radius:5px;font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);border:1px dashed var(--line-2)}
+  .body{display:grid;gap:var(--sp-2);padding:8px 12px 12px}
+
+  /* activity card (shared by Activity and Expanded) */
+  .acard{display:grid;gap:7px;padding:10px 11px;border-radius:var(--r-m);background:rgba(0,0,0,.26);border:1px solid var(--line)}
+  .arow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .afile{font:11.5px var(--mono);color:var(--ink-2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .astat{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2)}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--ink-3);flex:none}.acard[data-run=true] .live{background:#ffc766;box-shadow:0 0 8px #ffc766;animation:pulse 1.2s infinite}
+  .acard[data-done=true] .live{background:var(--safe);box-shadow:0 0 8px var(--safe);animation:none}
+  .prog{display:none;flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;min-width:40px}.prog.on{display:block}.prog span{display:block;height:100%;background:linear-gradient(90deg,var(--violet),var(--teal));transition:width .4s}
+  pre.code{scrollbar-width:thin;margin:0;padding:8px 10px;border-radius:var(--r-s);background:rgba(3,4,14,.7);border:1px solid var(--line);font:11.5px/1.55 var(--mono);color:#cfd5ff;overflow:auto;height:92px;white-space:pre;tab-size:2}
+  .l-expanded pre.code{height:78px}
+  .acard[data-full=true] pre.code{height:auto;min-height:92px;max-height:190px}
+  pre.code i{font-style:normal}pre.code .k{color:#c6a8ff}pre.code .s{color:#8fe9b6}pre.code .c{color:#6c7299}pre.code .n{color:#ffc27a}pre.code .f{color:#7bdcf0}
+  .caret{display:inline-block;width:6px;height:12px;margin-left:1px;vertical-align:-2px;background:#cdbfff;animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+  .cfoot{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-3)}.cfoot .grow{flex:1}
+  .link{background:none;border:0;padding:2px 0;color:#bcaeff;cursor:pointer;font-size:11.5px}.link:hover{color:#fff}
+  .empty{padding:14px 10px;text-align:center;color:var(--ink-3);font-size:12px}
+
+  /* expanded extras */
+  .sess{display:flex;align-items:center;gap:var(--sp-3);padding:7px 11px;border-radius:var(--r-m);background:var(--glass-2);border:1px solid var(--line)}
+  .dot{width:7px;height:7px;border-radius:50%;flex:none;background:var(--ink-3)}.dot.work{background:#ffc766;box-shadow:0 0 8px #ffc766}.dot.ok{background:var(--safe)}
+  .sess .grow{flex:1;min-width:0}.sess b{font-size:12.5px}.sess small{display:block;color:var(--ink-3);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pend{display:none;align-items:center;gap:var(--sp-3);padding:8px 11px;border-radius:var(--r-m);background:rgba(255,127,174,.09);border:1px solid rgba(255,127,174,.45)}
+  body[data-pending=true] .pend{display:flex}.pend .grow{flex:1;min-width:0;font-size:12px}.pend code{font-family:var(--mono);font-size:11.5px}
+  .qa{display:flex;gap:var(--sp-2)}.qbtn{flex:1;min-height:34px;padding:0 8px;border-radius:var(--r-m);border:1px solid var(--line-2);background:var(--glass-2);cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap;transition:background var(--t-fast)}
+  .qbtn:hover{background:rgba(176,186,255,.14)}
+  .setrow{display:flex;align-items:center;gap:var(--sp-2);font-size:12px;color:var(--ink-2)}.setrow .grow{flex:1}
+  select{background:rgba(255,255,255,.06);border:1px solid var(--line-2);border-radius:8px;padding:4px 8px;color:var(--ink)}select option{background:#12142e}
+  .note{min-height:15px;font-size:11px;color:var(--ink-3)}
+
+  /* permission card */
+  .l-attn{padding:12px 14px 12px}
+  .view{display:none}.view.on{display:block;animation:fadein var(--t-fade) var(--ease-out)}
+  @keyframes fadein{from{opacity:0;transform:translateY(5px)}}
+  .hd{display:flex;flex-direction:column;justify-content:center;padding-left:78px;padding-right:36px;min-height:64px;gap:3px}
+  .hd .t1{display:flex;align-items:center;gap:8px}.need{font-size:11.5px;color:#ffb0cc}
+  #aFold{position:absolute;top:10px;right:12px;z-index:3}
+  .risk{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 7px;border-radius:999px;font-size:11.5px;font-weight:600;color:var(--risk);background:color-mix(in srgb,var(--risk) 14%,transparent);border:1px solid color-mix(in srgb,var(--risk) 45%,transparent)}
+  .rrow{display:flex;align-items:center;gap:var(--sp-2);margin:10px 0 7px;flex-wrap:wrap}.sum{font-size:14px;font-weight:600}
+  .cmd{display:block;margin:0;padding:8px 11px;border-radius:var(--r-s);background:rgba(0,0,0,.38);border:1px solid var(--line);font:12px/1.5 var(--mono);color:#dfe4ff;word-break:break-all}
+  .cmd::before{content:"› ";color:var(--risk)}
+  .more{margin-top:6px;display:inline-flex;align-items:center;gap:6px;background:none;border:0;padding:3px 2px;color:var(--ink-2);cursor:pointer;font-size:11.5px}
+  .more:hover{color:var(--ink)}.more .ico{transition:transform var(--t-fast)}.more[aria-expanded=true] .ico{transform:rotate(180deg)}
+  .det{display:none;margin:4px 0 0;padding:8px 11px;border-radius:var(--r-s);background:var(--glass-2);border:1px solid var(--line);font-size:11.5px;color:var(--ink-2)}
+  .det.on{display:grid;gap:4px;grid-template-columns:auto 1fr;column-gap:12px}.det dt{color:var(--ink-3)}.det dd{margin:0;font-family:var(--mono);font-size:11px;word-break:break-all}
+  .acts{display:flex;gap:var(--sp-2);margin-top:12px}
+  .btn{flex:1;min-height:40px;padding:0 var(--sp-3);border-radius:var(--r-m);border:1px solid var(--line-2);background:var(--glass-2);cursor:pointer;font-weight:600;white-space:nowrap;font-size:13px;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:transform var(--t-fast) var(--ease-spring),background var(--t-fast)}
+  .btn:hover{background:rgba(176,186,255,.14);transform:translateY(-1px)}.btn:active{transform:translateY(1px) scale(.98)}
+  .btn.primary{flex:1.3;border:0;color:#052018;background:linear-gradient(135deg,#7cf0b4,#58dccf);box-shadow:0 6px 18px -6px rgba(95,224,210,.7)}
+  .btn.primary:hover{background:linear-gradient(135deg,#92f6c3,#6fe8dc)}
+  .btn.always{border-style:dashed;color:#cdbfff;border-color:rgba(168,147,255,.55)}.btn.deny{color:#ffd0d8}
+  .foot{margin-top:9px;text-align:center;font-size:10.5px;color:var(--ink-3)}
+  .rule-t{font-size:14px;font-weight:600;margin:10px 0 3px}.rule-p{margin:0 0 8px;color:var(--ink-2);font-size:12px}
+  .scope{display:grid;gap:6px;margin:8px 0}
+  .opt{display:flex;gap:10px;align-items:flex-start;padding:8px 11px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--glass-2);cursor:pointer}
+  .opt:has(input:checked){border-color:rgba(168,147,255,.7);background:rgba(168,147,255,.1)}.opt input{margin-top:3px;accent-color:#a893ff}.opt b{font-size:12.5px}.opt small{display:block;color:var(--ink-3);font-size:11px}
+  .warn{display:none;margin:0 0 8px;padding:7px 11px;border-radius:var(--r-s);font-size:11.5px;color:#ffc2cc;background:rgba(238,111,132,.1);border:1px solid rgba(238,111,132,.4)}.warn.on{display:block}
+
+  /* ═════════ TEST CONTROLS — clearly not part of Aurora ═════════ */
+  #preview{position:fixed;left:50%;bottom:8px;transform:translateX(-50%);width:min(820px,calc(100vw - 16px));z-index:9;padding:7px 11px;border-radius:12px;
+    background:rgba(6,8,20,.86);border:1px dashed rgba(255,255,255,.22);display:grid;gap:4px;font-size:12px}
+  #preview .top{display:flex;align-items:center;gap:8px;color:var(--ink-3);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase}
+  #preview .top .grow{flex:1}
+  #preview .g{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+  #preview .gl{width:62px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+  #preview button.p{padding:3px 9px;border-radius:7px;border:1px solid rgba(255,255,255,.14);background:transparent;cursor:pointer;font-size:11.5px;color:var(--ink-2)}
+  #preview button.p:hover{background:rgba(255,255,255,.08);color:#fff}
+  #preview button.p[aria-pressed=true]{background:rgba(255,255,255,.16);color:#fff;border-color:rgba(255,255,255,.4)}
+  #preview textarea#ed{flex:1;min-width:160px;height:42px;resize:none;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#dfe4ff;font:12.5px/1.5 var(--mono);padding:6px 10px;tab-size:2}
+  #preview textarea#ed:focus{outline:2px solid var(--focus);outline-offset:1px}
+  #preview.min .g,#preview.min .hint{display:none}
+  #preview .hint,#idleInfo{color:var(--ink-3);font-size:11px}
+  @media (max-width:560px){#preview .gl{width:100%}}
+  @media (prefers-reduced-motion:reduce){:root{--t-morph:.01s;--t-fast:.01s;--t-fade:.01s}.tw,.nind i,.act i,.live,.caret{animation:none!important}}
+</style>
+</head>
+<body data-mode="compact" data-pending="false">
+<canvas id="bg"></canvas>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div id="dock">
+  <div class="shell" id="shell" data-s="compact">
+    <span class="tw t1"></span><span class="tw t2"></span><span class="tw t3"></span>
+    <div id="slot" aria-hidden="true"></div>
+
+    <!-- NOTCH: tiny capsule, Nebula inside, optional status indicator on the right -->
+    <div class="layer l-notch" id="notch">
+      <button class="nmain" id="nmain" aria-label="Open Aurora"></button>
+      <button class="nind" id="nind" data-k="idle" aria-label="Show activity"><i></i><i></i><i></i></button>
+    </div>
+
+    <!-- COMPACT -->
+    <div class="layer l-compact" id="compact" role="group" aria-label="Aurora companion">
+      <button class="cmain" id="cmain" aria-label="Open Aurora details">
+        <span class="crow"><span class="title">Aurora</span><span class="stat" id="cstat">Idle</span><span class="badge">Needs OK</span></span>
+        <span class="msg" id="cmsg"></span>
+      </button>
+      <button class="act" id="cact" data-k="idle" aria-label="Show activity"><i></i><i></i><i></i></button>
+      <button class="iconbtn" id="cExpand" aria-label="Expand"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <button class="iconbtn" id="cDismiss" aria-label="Minimize to the notch"><svg class="ico" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+    </div>
+
+    <!-- ACTIVITY PREVIEW: shallow panel with the current coding task -->
+    <div class="layer l-activity" id="activity">
+      <div class="head">
+        <div class="grow"><div class="crow"><span class="title">Aurora</span><span class="stat" data-bind="stat">Idle</span></div><div class="msg" data-bind="msg"></div></div>
+        <button class="iconbtn" data-go="expanded" aria-label="Expand"><svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <button class="iconbtn" data-go="notch" aria-label="Minimize to the notch"><svg class="ico" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      </div>
+      <div class="body"><div class="acard-host"></div></div>
+    </div>
+
+    <!-- EXPANDED -->
+    <div class="layer l-expanded" id="panel">
+      <div class="head">
+        <div class="grow"><div class="crow"><span class="title" style="font-size:14px">Aurora</span><span class="chip" data-bind="stat">Idle</span></div><div class="msg" data-bind="msg" style="white-space:normal"></div></div>
+        <button class="iconbtn" data-go="compact" aria-label="Collapse to compact"><svg class="ico" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+        <button class="iconbtn" data-go="notch" aria-label="Minimize to the notch"><svg class="ico" viewBox="0 0 24 24"><path d="M6 12h12"/></svg></button>
+      </div>
+      <div class="body">
+        <div class="pend"><span class="grow"><b>Claude Code</b> is waiting for you<br><code id="pendCmd"></code></span><button class="qbtn" id="pReview" style="flex:none">Review</button></div>
+        <div class="acard-host"></div>
+        <div class="sess"><span class="dot ok"></span><span class="grow"><b>2 other agents</b><small>Codex · 14 tests passed &nbsp;·&nbsp; Gemini CLI · idle</small></span></div>
+        <div class="qa"><button class="qbtn" data-q="Pause agents">Pause agents</button><button class="qbtn" data-q="Panic stop">Panic stop</button></div>
+        <div class="setrow"><label for="autoSel" class="grow">Auto-minimize after</label>
+          <select id="autoSel"><option value="3">3 seconds</option><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="15">15 seconds</option><option value="0">Never</option></select></div>
+        <div class="note" id="qnote">Demo data · nothing here is connected to a real agent.</div>
+      </div>
+    </div>
+
+    <!-- PERMISSION REQUEST -->
+    <div class="layer l-attn" id="attn">
+      <div class="view on" id="vMain">
+        <div class="hd"><div class="t1"><span class="title">Aurora</span><span class="need">· Needs your OK</span></div>
+          <span class="chip" style="width:max-content"><svg class="ico" viewBox="0 0 24 24"><path d="M4 17l6-5-6-5M12 19h8"/></svg><span id="reqWho">Claude Code · aurora-demo</span></span></div>
+        <button class="iconbtn" id="aFold" aria-label="Fold, keep the request for later"><svg class="ico" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
+        <div class="rrow"><span class="risk" id="risk"><svg class="ico" id="riskIco" viewBox="0 0 24 24"></svg><span id="riskTxt">Risky</span></span><span class="sum" id="sum"></span></div>
+        <code class="cmd" id="cmd"></code>
+        <button class="more" id="more" aria-expanded="false" aria-controls="det"><span>Details</span><svg class="ico" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+        <dl class="det" id="det"></dl>
+        <div class="acts">
+          <button class="btn deny" id="bDeny"><svg class="ico" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Deny</button>
+          <button class="btn always" id="bAlways"><svg class="ico" viewBox="0 0 24 24"><path d="M8 12c0-2 1.3-4 3.5-4S15 12 16 12s3.5-2 3.5-4M16 12c0 2-1.3 4-3.5 4S9 12 8 12s-3.5 2-3.5 4"/></svg>Always allow</button>
+          <button class="btn primary" id="bAllow"><svg class="ico" viewBox="0 0 24 24"><path d="M5 12l5 5L20 7"/></svg>Allow</button>
+        </div>
+        <div class="foot">Preview only · these buttons do not run or approve anything</div>
+      </div>
+      <div class="view" id="vRule">
+        <div class="hd"><div class="t1"><span class="title">Aurora</span><span class="need" style="color:var(--ink-3)">· New rule (preview)</span></div></div>
+        <h3 class="rule-t">Always allow this?</h3>
+        <p class="rule-p">Allow <code id="ruleCmd"></code> (Bash) without asking.</p>
+        <div class="warn" id="ruleWarn">This command can destroy data. Rules for dangerous commands are not recommended.</div>
+        <div class="scope" role="radiogroup" aria-label="Rule scope">
+          <label class="opt"><input type="radio" name="scope" checked><span><b>This project only</b><small>Applies in aurora-demo</small></span></label>
+          <label class="opt"><input type="radio" name="scope"><span><b>All projects</b><small>Applies everywhere you use Claude Code</small></span></label>
+          <label class="opt"><input type="radio" name="scope"><span><b>This session only</b><small>Forgotten when the session ends</small></span></label>
+        </div>
+        <div class="acts"><button class="btn" id="rCancel">Back</button><button class="btn primary" id="rOk">Create rule</button></div>
+        <div class="foot">Preview only · no rule is saved</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<aside id="preview" aria-label="Test controls (not part of Aurora)">
+  <div class="top"><span>Test controls · not part of Aurora</span><span class="grow"></span><span id="idleInfo"></span><button class="p" id="bHide" aria-pressed="false">Hide</button><button class="p" id="bSound" aria-pressed="true">Sound on</button></div>
+  <div class="g"><span class="gl">Mode</span><span class="g" id="gMode"></span></div>
+  <div class="g"><span class="gl">Nebula</span><span class="g" id="gNeb"></span></div>
+  <div class="g"><span class="gl">Request</span><span class="g" id="gRisk"></span></div>
+  <div class="g"><span class="gl">Activity</span><span class="g" id="gAct"></span><span class="hint">mock events · not live</span></div>
+  <div class="g"><span class="gl">Auto-min</span><span class="g" id="gAuto"></span></div>
+  <div class="g"><span class="gl">Editor</span><textarea id="ed" spellcheck="false" aria-label="Demo editor (stands in for VS Code)" placeholder="Type some code here, e.g.  function add(a, b) { return a + b }"></textarea></div>
+  <div class="g"><span class="gl"></span><span class="g" id="gEd"></span><span class="hint">demo editor · stands in for VS Code · Aurora only sees what you type in this box</span></div>
+  <div class="hint">Hover or click the notch to restore · click Nebula · 3 fast clicks = dizzy · keys 1–9 and 0 switch Nebula · Esc folds</div>
+</aside>
+
+<script>
+(()=>{
+'use strict';
+const TAU=Math.PI*2,clamp=(v,a,b)=>Math.min(b,Math.max(a,v)),lerp=(a,b,k)=>a+(b-a)*k,ease=(dt,rate)=>1-Math.exp(-rate*dt);
+const $=id=>document.getElementById(id);
+const RMQ=matchMedia('(prefers-reduced-motion: reduce)');let RM=RMQ.matches;RMQ.addEventListener?.('change',e=>RM=e.matches);
+
+/* ───────── damped spring ───────── */
+class Spring{constructor(x=0,k=170,d=15){this.x=x;this.v=0;this.t=x;this.k=k;this.d=d}
+  step(dt){const n=Math.max(1,Math.ceil(dt/.008)),h=dt/n;for(let i=0;i<n;i++){this.v+=(-this.k*(this.x-this.t)-this.d*this.v)*h;this.x+=this.v*h}return this.x}}
+
+/* ───────── audio: synthesized only, with per-sound cooldowns ───────── */
+const AU={ctx:null,out:null,muted:false,last:{}};
+try{AU.muted=localStorage.getItem('aurora-muted')==='1'}catch(e){}
+function audio(){
+  if(!AU.ctx){try{const C=window.AudioContext||window.webkitAudioContext;AU.ctx=new C();const g=AU.ctx.createGain();g.gain.value=.5;
+    const lp=AU.ctx.createBiquadFilter();lp.type='lowpass';lp.frequency.value=4800;g.connect(lp);lp.connect(AU.ctx.destination);AU.out=g}catch(e){AU.ctx=null}}
+  if(AU.ctx&&AU.ctx.state==='suspended')AU.ctx.resume();return AU.ctx}
+function note(f,at,dur,o={}){const ctx=audio();if(!ctx)return;const{type='sine',vol:v=.05,to=0}=o,t=ctx.currentTime+at;
+  const osc=ctx.createOscillator(),g=ctx.createGain();osc.type=type;osc.frequency.setValueAtTime(f,t);if(to)osc.frequency.exponentialRampToValueAtTime(to,t+dur);
+  g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(v,t+.015);g.gain.exponentialRampToValueAtTime(.0001,t+dur);osc.connect(g);g.connect(AU.out);osc.start(t);osc.stop(t+dur+.05)}
+const SFX={
+  poke:()=>note(540,0,.12,{type:'triangle',vol:.06,to:800}),
+  hover:()=>{note(1568,0,.2,{vol:.025});note(2093,.08,.22,{vol:.02})},
+  dizzy:()=>[0,.11,.22,.33].forEach((t,i)=>note(600-i*55,t,.14,{type:'triangle',vol:.05,to:520-i*55})),
+  working:()=>{note(210,0,.4,{vol:.04,to:430});note(320,.06,.34,{vol:.025,to:620})},
+  attention:()=>{note(880,0,.32,{vol:.06});note(1175,.15,.45,{vol:.06});note(1568,.32,.55,{vol:.03})},
+  done:()=>{[523,659,784,1047,1319].forEach((f,i)=>note(f,i*.08,.38,{vol:.05}));note(2093,.4,.5,{type:'triangle',vol:.018})},
+  allow:()=>{note(660,0,.12,{type:'triangle',vol:.05});note(990,.09,.2,{type:'triangle',vol:.05})},
+  deny:()=>{note(330,0,.16,{type:'triangle',vol:.05,to:260});note(240,.12,.24,{type:'triangle',vol:.045,to:190})},
+  wake:()=>note(440,0,.16,{vol:.04,to:660}),
+  aha:()=>{note(784,0,.2,{vol:.045});note(1175,.11,.3,{vol:.045});note(1568,.24,.42,{vol:.025})},
+  open:()=>note(700,0,.09,{vol:.025,to:900}),close:()=>note(700,0,.09,{vol:.025,to:520})
+};
+const COOL={poke:.14,hover:2.5,dizzy:2,working:1.2,attention:1.2,done:1.2,allow:.25,deny:.25,wake:.8,aha:1.5,open:.2,close:.2};
+function sfx(n){if(AU.muted)return;const now=performance.now();if(now-(AU.last[n]||0)<COOL[n]*1000)return;AU.last[n]=now;SFX[n]()}
+
+/* ───────── Nebula states ─────────
+   Every value is a *target*: springs and exponential easing move Nebula toward it, so nothing ever snaps.
+   orbit = ring speed (kept slow on purpose) · ears -1 droop..1 perked · eyes openness · eyeSz size · mouth -1 frown..1 smile
+   mouthO surprised "o" · happy ^ ^ eyes · gaze = fixed look direction (null = follow the pointer / the editor)
+   think = floating thought dots · lean = how much the head and ears turn toward whatever he is looking at */
+const STATES={
+  idle:      {label:'Idle',      msg:'All quiet. Watching 3 agents.', a:[158,132,255],b:[72,208,214], orbit:.26,ears:.12,eyes:1,  eyeSz:1,   mouth:.28,mouthO:0,  happy:0,blush:.2, pose:0, spark:.008,breath:1,  tilt:1,  lean:0},
+  curious:   {label:'Curious',   msg:'Watching you type…',            a:[108,224,238],b:[148,152,255],orbit:.36,ears:.8, eyes:1.06,eyeSz:1.22,mouth:0,  mouthO:.2, happy:0,blush:.25,pose:-1,spark:.015,breath:1,  tilt:3,  lean:1},
+  thinking:  {label:'Thinking',  msg:'Reading what you wrote…',       a:[150,140,255],b:[100,170,236],orbit:.16,ears:.2, eyes:.9, eyeSz:1,   mouth:0,  mouthO:0,  happy:0,blush:.1, pose:0, spark:.008,breath:1.2,tilt:1.6,lean:.4,think:1,gaze:[-.5,-.62]},
+  understood:{label:'Understood',msg:'Got it.',                       a:[128,246,186],b:[255,214,124],orbit:.42,ears:.7, eyes:1,  eyeSz:1,   mouth:.9, mouthO:0,  happy:1,blush:.8, pose:0, spark:.03, breath:1,  tilt:1,  lean:0},
+  happy:     {label:'Happy',     msg:'Feeling good.',                 a:[196,156,255],b:[255,170,208],orbit:.34,ears:.5, eyes:1,  eyeSz:1.05,mouth:.95,mouthO:0,  happy:1,blush:.9, pose:0, spark:.02, breath:1.1,tilt:1,  lean:0},
+  listening: {label:'Listening', msg:'I’m listening…',                a:[150,152,255],b:[92,232,224], orbit:.32,ears:.55,eyes:1,  eyeSz:1.12,mouth:0,  mouthO:.28,happy:0,blush:.2, pose:-1,spark:.015,breath:1,  tilt:2.2,lean:.6},
+  working:   {label:'Working',   msg:'Claude Code is editing 3 files.',a:[255,206,112],b:[255,152,92],orbit:.62,ears:.1, eyes:.78,eyeSz:.96, mouth:0,  mouthO:0,  happy:0,blush:.1, pose:1, spark:.03, breath:1.3,tilt:.6,  lean:0},
+  attention: {label:'Needs you', msg:'Claude Code needs your OK.',    a:[255,122,182],b:[255,166,112],orbit:.48,ears:1,  eyes:1.08,eyeSz:1.3, mouth:0,  mouthO:.14,happy:0,blush:.35,pose:-2,spark:.02, breath:1.2,tilt:1.4,lean:0},
+  done:      {label:'Done',      msg:'Finished — 12 files updated.',  a:[118,250,180],b:[74,218,240], orbit:.4, ears:.4, eyes:1,  eyeSz:1,   mouth:.9, mouthO:0,  happy:1,blush:.85,pose:0, spark:.03, breath:1,  tilt:1,  lean:0},
+  sleeping:  {label:'Sleeping',  msg:'Resting. Move the mouse to wake me.',a:[104,96,172],b:[58,124,142],orbit:.07,ears:-.9,eyes:.03,eyeSz:1,  mouth:0,  mouthO:0,  happy:0,blush:.15,pose:2, spark:0,   breath:.7, tilt:0,  lean:0,sleep:1},
+  sad:       {label:'Sad',       msg:'Declined. I told the agent.',   a:[112,138,236],b:[88,108,200], orbit:.12,ears:-.55,eyes:.8,eyeSz:.88, mouth:-.9,mouthO:0,  happy:0,blush:0,  pose:3, spark:0,   breath:.8, tilt:.4,  lean:0}
+};
+const rgb=a=>`${a[0]|0},${a[1]|0},${a[2]|0}`;
+
+/* particles: shared pools, capped; sized by the creature's current scale so small modes stay tidy */
+const sparks=[],hearts=[],MAX_SPARKS=60;
+function burst(x,y,n,speed,A,B,sc){sc=clamp(sc,.3,1.2);if(RM)n=Math.min(n,3);n=Math.max(1,Math.round(n*(.4+.6*sc)));
+  for(let i=0;i<n&&sparks.length<MAX_SPARKS;i++){const a=Math.random()*TAU,v=(.6+Math.random()*2)*speed*sc;sparks.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,l:1,c:Math.random()<.5?A:B,z:sc})}}
+function starPath(c,x,y,R,r,n){c.beginPath();for(let i=0;i<n*2;i++){const a=Math.PI/n*i-Math.PI/2,rad=i%2?r:R;c.lineTo(x+Math.cos(a)*rad,y+Math.sin(a)*rad)}c.closePath()}
+const easeOutBack=x=>1+2.7*Math.pow(x-1,3)+1.7*Math.pow(x-1,2);
+/* a smooth, slowly breathing blob: the body's defined silhouette */
+function blobPath(c,r,T){const n=9,p=[];for(let i=0;i<n;i++){const a=i/n*TAU,k=1+.035*Math.sin(T*.8+i*1.9)+.025*Math.sin(T*.55+i*3.1);p.push([Math.cos(a)*r*.74*k,Math.sin(a)*r*.7*k])}
+  c.beginPath();c.moveTo((p[n-1][0]+p[0][0])/2,(p[n-1][1]+p[0][1])/2);
+  for(let i=0;i<n;i++){const q=p[(i+1)%n],u=p[i];c.quadraticCurveTo(u[0],u[1],(u[0]+q[0])/2,(u[1]+q[1])/2)}c.closePath()}
+
+const GEMC=['255,214,124','255,160,208','124,236,226','196,176,255','255,255,255'];
+/* ───────── the creature (ONE instance; position and size come from the avatar slot) ───────── */
+class Creature{
+  constructor(){
+    this.r=24;this.x=0;this.y=0;this.vis=1;this.state='idle';this.a=[...STATES.idle.a];this.b=[...STATES.idle.b];
+    this.puffs=Array.from({length:16},(_,i)=>({a:i/16*TAU+Math.random()*.4,d:.5+Math.random()*.5,s:.4+Math.random()*.8,r:.26+Math.random()*.3,ph:Math.random()*TAU}));
+    // softer springs than before: less wobble, more float
+    this.earL=new Spring(.12,120,15);this.earR=new Spring(.12,120,15);this.eyeOpen=new Spring(1,200,26);this.eyeSz=new Spring(1,150,19);
+    this.mc=new Spring(.28,130,18);this.mO=new Spring(0,150,19);this.happy=new Spring(0,110,18);this.blush=new Spring(.2,90,16);this.pose=new Spring(0,70,14);
+    this.sq=new Spring(0,220,15);this.by=new Spring(0,110,11);this.nod=new Spring(0,140,12);this.thinkW=new Spring(0,70,14);
+    this.orbit=.26;this.ringPh=Math.random()*TAU;this.look={x:0,y:0};this.gaze=null;
+    this.sleepAmt=0;this.fear=0;this.dizzyT=0;this.spin=0;this.hover=0;this.blinkT=0;this.nextBlink=1.5+Math.random()*2;this.sparkAcc=0;this.alert=0;this.breath=0;
+    this.ahaT=0;this.nodQ=0;this.typeK=0;
+    this.lapW=new Spring(0,80,13);
+    this.gems=Array.from({length:9},(_,i)=>({a:Math.random()*TAU,d:.3+Math.random()*.4,s:.5+Math.random()*.9,ph:Math.random()*TAU,z:.7+Math.random()*.7,c:GEMC[i%GEMC.length]}));
+  }
+  get sc(){return this.r/74}
+  setState(s){if(s===this.state)return;this.state=s;const k=RM?.3:1,sc=this.sc;
+    if(s==='attention'){this.by.v-=240*sc*k;this.alert=1;this.earL.v+=3*k;this.earR.v+=3*k}
+    if(s==='done'){this.by.v-=340*sc*k;this.sq.x=.2;burst(this.x,this.y,12,1.3,rgb(this.a),rgb(this.b),this.r/60)}
+    if(s==='understood'){this.ahaT=1;this.nod.v+=2.6*k;this.nodQ=.32;this.by.v-=200*sc*k;burst(this.x,this.y-this.r*.5,12,1.2,rgb(this.a),rgb(this.b),this.r/60)}
+    if(s==='happy'){this.by.v-=170*sc*k;burst(this.x,this.y,8,1,rgb(this.a),rgb(this.b),this.r/60)}
+    if(s==='curious'){this.earL.v+=3*k;this.earR.v+=3*k}
+    if(s==='sad')this.by.v+=40*sc*k}
+  poke(){const k=RM?.3:1;this.sq.x=.4*k;this.fear=1;this.blinkT=.16;this.earL.v+=5*k;this.earR.v+=5*k;burst(this.x,this.y,7,1,rgb(this.a),rgb(this.b),this.r/60)}
+  dizzy(){this.dizzyT=3.2;burst(this.x,this.y-this.r*.6,6,.8,rgb(this.a),rgb(this.b),this.r/60)}
+  keyTick(){this.typeK=1;(Math.random()<.5?this.earL:this.earR).v+=2.2}      // a tiny ear twitch for every key he notices
+  update(dt,T,ptr,idleLong){
+    const st=STATES[this.state],rm=RM?.35:1;
+    const kc=ease(dt,2.1);for(let i=0;i<3;i++){this.a[i]+=(st.a[i]-this.a[i])*kc;this.b[i]+=(st.b[i]-this.b[i])*kc}     // colours drift, never jump
+    this.orbit+=(st.orbit*(RM?.4:1)*(this.dizzyT>0?2:1)-this.orbit)*ease(dt,1.2);this.ringPh+=dt*this.orbit*1.7;
+    this.sleepAmt+=((st.sleep||idleLong?1:0)-this.sleepAmt)*ease(dt,1.4);const sl=this.sleepAmt;
+    // where is he looking? editor gaze > the state's own gaze > the mouse pointer
+    let lx,ly;
+    if(this.gaze){const dx=this.gaze.x-this.x,dy=this.gaze.y-this.y,d=Math.hypot(dx,dy)||1,m=Math.min(1,d/Math.max(this.r*2.2,90));lx=dx/d*m;ly=dy/d*m}
+    else if(st.gaze){lx=st.gaze[0]+Math.sin(T*.5)*.08;ly=st.gaze[1]+Math.cos(T*.4)*.06}
+    else{const dx=ptr.x-this.x,dy=ptr.y-this.y,d=Math.hypot(dx,dy)||1,m=Math.min(1,d/Math.max(this.r*3.4,150));lx=dx/d*m;ly=dy/d*m}
+    lx*=1-sl;ly*=1-sl;this.look.x+=(lx-this.look.x)*ease(dt,6);this.look.y+=(ly-this.look.y)*ease(dt,6);
+    this.fear=Math.max(0,this.fear-dt*1.5);this.alert=Math.max(0,this.alert-dt*.5);this.typeK=Math.max(0,this.typeK-dt*3.2);
+    if(this.dizzyT>0){this.dizzyT-=dt;this.spin+=dt*9}
+    if(this.ahaT>0)this.ahaT=Math.max(0,this.ahaT-dt/1.5);
+    if(this.nodQ>0){this.nodQ-=dt;if(this.nodQ<=0)this.nod.v+=2.2}
+    this.blinkT=Math.max(0,this.blinkT-dt);this.nextBlink-=dt;if(this.nextBlink<0){this.blinkT=.16;this.nextBlink=2.4+Math.random()*3.5}
+    const wig=this.hover>.5&&!RM?Math.sin(T*4.5)*.12:0,lean=(st.lean||0)*this.look.x*.3,base=lerp(st.ears,-.9,sl);
+    this.earL.t=base+wig-lean+(st.think?.3:0);this.earR.t=base-wig+lean-(st.think?.12:0);
+    this.eyeOpen.t=lerp(st.eyes,.03,sl)*(1-this.typeK*.1);this.eyeSz.t=st.eyeSz*(1+this.fear*.3);
+    this.mc.t=clamp(st.mouth+this.hover*.5-this.fear*.3,-1,1);this.mO.t=st.mouthO+this.fear*.8;
+    this.happy.t=Math.max(st.happy,this.hover>.5?.7:0)*(1-sl);this.blush.t=Math.max(st.blush,this.hover*.8,this.fear*.5);
+    this.pose.t=st.pose*this.r*.06*(1-sl*.3)+sl*this.r*.08;this.thinkW.t=st.think?1:0;this.lapW.t=(this.state==='working'&&!(this.dizzyT>0))?1:0;
+    for(const s of [this.earL,this.earR,this.eyeOpen,this.eyeSz,this.mc,this.mO,this.happy,this.blush,this.pose,this.sq,this.by,this.nod,this.thinkW,this.lapW])s.step(dt);
+    this.sparkAcc+=st.spark*rm*dt*60*clamp(this.r/60,.25,1);while(this.sparkAcc>=1){this.sparkAcc-=1;
+      burst(this.x+(Math.random()-.5)*this.r*1.4,this.y+(Math.random()-.5)*this.r*1.2,1,.22,rgb(this.a),rgb(this.b),this.r/60)}
+    this.breath=Math.sin(T*1.25)*.014*st.breath*rm;
+  }
+  draw(c,T){
+    const r=this.r,s=r/74,st=STATES[this.state],A=rgb(this.a),B=rgb(this.b),sl=this.sleepAmt,lite=r<20;   // lite = simplified fine detail at small sizes
+    const bob=RM?0:Math.sin(T*.8)*r*.03;
+    c.save();c.globalAlpha=this.vis;c.translate(this.x+this.look.x*r*.04*(st.lean||0),this.y+this.by.x+this.pose.x+bob+this.nod.x*r*.07);
+    c.scale((1+this.sq.x*.38+this.breath)*(1-sl*.06),(1-this.sq.x*.38-this.breath-this.nod.x*.05)*(1-sl*.06));
+    c.rotate((this.dizzyT>0?Math.sin(this.spin*.5)*.18:0)+this.look.x*.06*st.tilt*(RM?.3:1));
+    // halo: slow, gentle swell
+    const pulse=this.alert*.5+(this.state==='attention'&&!RM?Math.sin(T*2.2)*.08:0),hr=r*(lite?1.55:2.1)+r*pulse;
+    let g=c.createRadialGradient(0,0,r*.25,0,0,hr);g.addColorStop(0,`rgba(${A},.26)`);g.addColorStop(.55,`rgba(${B},.09)`);g.addColorStop(1,'rgba(0,0,0,0)');
+    c.fillStyle=g;c.beginPath();c.arc(0,0,hr,0,TAU);c.fill();
+    // ONE orbit ring, exactly three moons
+    const rr=r*1.24,ratio=.27+Math.sin(T*.3)*.015+(this.dizzyT>0?Math.sin(this.spin)*.03:0),tilt=-.34+this.look.x*.05;
+    const moons=[0,TAU/3,TAU*2/3].map(o=>{const a=this.ringPh+o;return{x:Math.cos(a)*rr,y:Math.sin(a)*rr*ratio,z:Math.sin(a)}});
+    const ring=front=>{c.save();c.rotate(tilt);c.lineCap='round';c.strokeStyle=front?`rgba(${A},.5)`:`rgba(${B},.2)`;c.lineWidth=Math.max(.8,(front?1.7:1.3)*s);
+      c.beginPath();c.ellipse(0,0,rr,rr*ratio,0,front?0:Math.PI,front?Math.PI:TAU);c.stroke();c.restore()};
+    const moonDraw=front=>{c.save();c.rotate(tilt);c.globalCompositeOperation='lighter';
+      for(const m of moons){if((m.z>0)!==front)continue;const dep=.78+.22*(m.z+1)/2,mr=Math.max(1.5,4.2*s)*dep,mg=c.createRadialGradient(m.x,m.y,0,m.x,m.y,mr*3);
+        mg.addColorStop(0,`rgba(255,255,255,${.9*dep})`);mg.addColorStop(.3,`rgba(${A},${.5*dep})`);mg.addColorStop(1,`rgba(${A},0)`);
+        c.fillStyle=mg;c.beginPath();c.arc(m.x,m.y,mr*3,0,TAU);c.fill();c.fillStyle=`rgba(255,255,255,${.95*dep})`;c.beginPath();c.arc(m.x,m.y,mr*.7,0,TAU);c.fill()}
+      c.restore()};
+    ring(false);moonDraw(false);
+    // body = soft outer cloud + a defined glowing silhouette with a thin rim
+    c.globalCompositeOperation='lighter';
+    const np=lite?7:16;
+    for(let i=0;i<np;i++){const p=this.puffs[i],ang=p.a+T*this.orbit*.5*p.s+(this.dizzyT>0?this.spin*.12:0),r0=p.d*r*.62;
+      const x=Math.cos(ang)*r0,y=Math.sin(ang)*r0*.9,pr=p.r*r*(.94+.06*Math.sin(T*.9+p.ph)),mx=p.d,
+        col=`${(this.a[0]*(1-mx)+this.b[0]*mx)|0},${(this.a[1]*(1-mx)+this.b[1]*mx)|0},${(this.a[2]*(1-mx)+this.b[2]*mx)|0}`;
+      const pg=c.createRadialGradient(x,y,0,x,y,pr);pg.addColorStop(0,`rgba(${col},.16)`);pg.addColorStop(1,`rgba(${col},0)`);c.fillStyle=pg;c.beginPath();c.arc(x,y,pr,0,TAU);c.fill()}
+    blobPath(c,r,T);g=c.createRadialGradient(-r*.18,-r*.22,r*.05,0,0,r*.9);
+    g.addColorStop(0,'rgba(255,255,255,.2)');g.addColorStop(.3,`rgba(${A},.4)`);g.addColorStop(.75,`rgba(${B},.26)`);g.addColorStop(1,`rgba(${B},.1)`);c.fillStyle=g;c.fill();
+    c.globalCompositeOperation='source-over';
+    blobPath(c,r,T);const rg=c.createLinearGradient(-r*.7,-r*.7,r*.7,r*.7);rg.addColorStop(0,`rgba(${A},.55)`);rg.addColorStop(1,`rgba(${B},.3)`);
+    c.strokeStyle=rg;c.lineWidth=Math.max(1,1.5*s);c.stroke();
+    c.globalCompositeOperation='lighter';
+    g=c.createRadialGradient(-r*.32,-r*.36,0,-r*.32,-r*.36,r*.5);g.addColorStop(0,'rgba(255,255,255,.22)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.beginPath();c.arc(-r*.32,-r*.36,r*.5,0,TAU);c.fill();
+    // tiny glowing stars of many colours drift inside the glass body, clipped to its silhouette
+    {c.save();blobPath(c,r,T);c.clip();
+     const ng=lite?4:9;
+     for(let i=0;i<ng;i++){const q=this.gems[i],ang=q.a+T*.1*q.s*(RM?.3:1),rad=q.d*r*(1+.06*Math.sin(T*.5+q.ph)),x=Math.cos(ang)*rad,y=Math.sin(ang)*rad*.85,
+        tw=.45+.55*Math.abs(Math.sin(T*.9*q.s+q.ph*2)),gr=r*.09*q.z*(.8+tw*.5),al=(.55+.45*tw)*(1-sl*.7);
+       const gg=c.createRadialGradient(x,y,0,x,y,gr*2.2);gg.addColorStop(0,`rgba(${q.c},${al})`);gg.addColorStop(.35,`rgba(${q.c},${al*.45})`);gg.addColorStop(1,`rgba(${q.c},0)`);
+       c.fillStyle=gg;c.beginPath();c.arc(x,y,gr*2.2,0,TAU);c.fill();c.fillStyle=`rgba(255,255,255,${al})`;
+       if(!lite){starPath(c,x,y,gr*.9,gr*.32,4);c.fill()}else{c.beginPath();c.arc(x,y,Math.max(.8,gr*.35),0,TAU);c.fill()}}
+     c.restore()}
+    // a curved glassy highlight on the upper-left of the body
+    c.save();c.strokeStyle='rgba(255,255,255,.3)';c.lineWidth=Math.max(1,2.2*s);c.lineCap='round';c.beginPath();c.arc(0,0,r*.6,Math.PI*1.05,Math.PI*1.4);c.stroke();c.restore();
+    c.globalCompositeOperation='source-over';
+    g=c.createRadialGradient(r*.22,r*.34,0,r*.22,r*.34,r*.62);g.addColorStop(0,'rgba(6,5,24,.32)');g.addColorStop(1,'rgba(6,5,24,0)');c.fillStyle=g;c.beginPath();c.arc(r*.22,r*.34,r*.62,0,TAU);c.fill();
+    // star ears
+    const earsA=1-sl*.4;
+    for(const side of [-1,1]){
+      const lift=(side<0?this.earL:this.earR).x,ang=side*(.86-lift*.2)+this.look.x*.1*st.tilt*(1-sl),dist=r*(.9+lift*.1),ex=Math.sin(ang)*dist,ey=-Math.cos(ang)*dist+(lift<0?-lift*r*.2:0);
+      c.save();c.lineCap='round';const sx0=Math.sin(ang)*r*.5,sy0=-Math.cos(ang)*r*.5;
+      c.strokeStyle=`rgba(${A},${.3*earsA})`;c.lineWidth=Math.max(1,3*s);c.beginPath();c.moveTo(sx0,sy0);c.quadraticCurveTo(sx0+(ex-sx0)*.5+side*r*.05,sy0+(ey-sy0)*.45,ex,ey);c.stroke();
+      c.translate(ex,ey);c.rotate(ang*.5+(RM?0:Math.sin(T*.7+side)*.08));c.shadowColor=`rgba(${A},.95)`;c.shadowBlur=(lite?5:14)*Math.max(.6,s);
+      c.fillStyle=`rgba(255,255,255,${.95*earsA})`;starPath(c,0,0,r*.165*(1+this.hover*.08),r*.05,4);c.fill();
+      c.rotate(Math.PI/4);c.fillStyle=`rgba(${A},${.6*earsA})`;c.shadowBlur=0;starPath(c,0,0,r*.09,r*.04,4);c.fill();c.restore()}
+    // face
+    g=c.createRadialGradient(0,0,0,0,0,r*.63);g.addColorStop(0,'rgba(9,7,32,.82)');g.addColorStop(.7,'rgba(9,7,32,.5)');g.addColorStop(1,'rgba(9,7,32,0)');c.fillStyle=g;c.beginPath();c.arc(0,0,r*.63,0,TAU);c.fill();
+    const eyeY=-r*.03+(this.state==='sad'?r*.04:0),gap=r*.27;
+    if(this.blush.x>.03&&!lite)for(const side of [-1,1]){const bx=side*gap*1.6+this.look.x*r*.07,by=eyeY+r*.18,bg=c.createRadialGradient(bx,by,0,bx,by,r*.18);
+      bg.addColorStop(0,`rgba(255,122,172,${.55*this.blush.x})`);bg.addColorStop(1,'rgba(255,122,172,0)');c.fillStyle=bg;c.beginPath();c.arc(bx,by,r*.18,0,TAU);c.fill()}
+    const blink=this.blinkT>0?Math.sin(Math.PI*(1-this.blinkT/.16)):0,open=clamp(this.eyeOpen.x*(1-blink),.05,1.2),happy=clamp(this.happy.x,0,1),starA=(1-happy)*(1-sl);
+    for(const side of [-1,1]){
+      const ex=side*gap+this.look.x*r*.1,ey=eyeY+this.look.y*r*.055;c.save();c.translate(ex,ey);
+      if(this.dizzyT>0){c.strokeStyle='rgba(255,255,255,.95)';c.lineWidth=Math.max(1,2*s);c.beginPath();for(let q=0;q<12;q+=.3){const rad=q*r*.019;c.lineTo(Math.cos(q+this.spin*side)*rad,Math.sin(q+this.spin*side)*rad)}c.stroke()}
+      else{
+        if(starA>.02){c.save();c.scale(1,open);c.globalAlpha*=starA;c.shadowColor=`rgba(${A},1)`;c.shadowBlur=(lite?4:13)*Math.max(.6,s);c.fillStyle='#fff';
+          const sz=this.eyeSz.x*(lite?1.2:1);starPath(c,0,0,r*.088*sz,r*.036*sz,4);c.fill();c.restore()}
+        c.strokeStyle='rgba(255,255,255,.92)';c.lineWidth=Math.max(1,2.1*s);c.lineCap='round';
+        if(happy>.02&&sl<.9){const ga=c.globalAlpha;c.globalAlpha=ga*happy*(1-sl);c.beginPath();c.arc(0,r*.03,r*.065,Math.PI*1.1,Math.PI*1.9);c.stroke();c.globalAlpha=ga}
+        if(sl>.02){const ga=c.globalAlpha;c.globalAlpha=ga*sl;c.beginPath();c.arc(0,-r*.01,r*.06,Math.PI*.1,Math.PI*.9);c.stroke();c.globalAlpha=ga}}
+      c.restore()}
+    // mouth
+    const my=eyeY+r*.27;c.lineCap='round';c.lineWidth=Math.max(1,2*s);
+    if(this.dizzyT>0){c.strokeStyle='rgba(255,255,255,.85)';c.beginPath();for(let i=0;i<=8;i++){c.lineTo((-5+i*1.25)*s,my+Math.sin(i*1.6+this.spin)*2*s)}c.stroke()}
+    else{const O=clamp(this.mO.x,0,1);
+      if(O>.06){c.strokeStyle=`rgba(255,255,255,${.85*O})`;c.beginPath();c.ellipse(0,my+2*s,(2+3.4*O)*s,(2.4+4.2*O)*s,0,0,TAU);c.stroke()}
+      const m=this.mc.x,al=clamp(Math.abs(m)*1.5+.28,0,.9)*(1-clamp(O*1.6,0,1))*(1-sl);
+      if(al>.04){c.strokeStyle=`rgba(255,255,255,${al})`;c.beginPath();c.moveTo(-6.5*s,my);c.quadraticCurveTo(0,my+m*9*s,6.5*s,my);c.stroke()}}
+    if(sl>.6&&!lite){c.fillStyle=`rgba(255,255,255,${.8*sl})`;c.font=`bold ${16*Math.max(.7,s)}px system-ui`;c.fillText('z',r*.5,-r*.5+Math.sin(T*1.6)*3);c.font=`bold ${12*Math.max(.7,s)}px system-ui`;c.fillText('z',r*.72,-r*.82+Math.sin(T*1.6+1)*3)}
+    ring(true);moonDraw(true);
+    // working: a tiny laptop with glowing code lines, and little paws that tap along
+    if(this.lapW.x>.03){const k=clamp(this.lapW.x,0,1.08),w=r*1.1,h=r*.46,tap=RM?0:T*7;
+      c.save();c.translate(0,r*.98+(1-Math.min(1,k))*r*.4);c.scale(k,k);c.globalAlpha*=clamp(k*1.4,0,1);
+      c.globalCompositeOperation='lighter';g=c.createRadialGradient(0,-h*.9,0,0,-h*.9,w*.95);g.addColorStop(0,`rgba(${B},.3)`);g.addColorStop(1,`rgba(${B},0)`);
+      c.fillStyle=g;c.beginPath();c.arc(0,-h*.9,w*.95,0,TAU);c.fill();c.globalCompositeOperation='source-over';
+      const cr=r*.07;c.beginPath();c.roundRect(-w*.5,-h,w,h,cr);c.fillStyle='rgba(12,14,38,.96)';c.fill();c.strokeStyle=`rgba(${A},.75)`;c.lineWidth=Math.max(1,1.3*s);c.stroke();
+      if(!lite){c.save();c.beginPath();c.roundRect(-w*.5+r*.05,-h+r*.05,w-r*.1,h-r*.1,cr*.6);c.clip();
+        const sg=c.createLinearGradient(0,-h,0,0);sg.addColorStop(0,`rgba(${A},.35)`);sg.addColorStop(1,`rgba(${B},.2)`);c.fillStyle=sg;c.fillRect(-w*.5,-h,w,h);
+        const lh=r*.1,off=RM?0:(T*r*.12)%(lh*2);
+        for(let i=-1;i<6;i++){const y=-h+r*.1+i*lh-off,lw=(.25+(((i+7)*37)%10)/10*.5)*w,x0=-w*.5+r*.12+(((i+3)%3)*r*.05);
+          c.fillStyle=i%2?`rgba(${A},.7)`:'rgba(255,255,255,.55)';c.beginPath();c.roundRect(x0,y,lw,Math.max(1,r*.045),r*.02);c.fill()}
+        c.restore()}
+      else{c.fillStyle=`rgba(${B},.55)`;c.fillRect(-w*.5+r*.05,-h+r*.05,w-r*.1,h-r*.1)}
+      c.beginPath();c.roundRect(-w*.6,0,w*1.2,r*.1,r*.05);c.fillStyle='rgba(44,48,92,.98)';c.fill();c.strokeStyle='rgba(255,255,255,.25)';c.lineWidth=Math.max(.8,s);c.stroke();
+      for(const side of [-1,1]){const py=-r*.01+Math.max(0,Math.sin(tap+(side>0?0:Math.PI)))*r*.035;
+        c.fillStyle=`rgba(${A},.95)`;c.beginPath();c.arc(side*w*.3,py,Math.max(1.5,r*.075),0,TAU);c.fill();
+        c.fillStyle='rgba(255,255,255,.35)';c.beginPath();c.arc(side*w*.3-r*.02,py-r*.025,Math.max(.8,r*.03),0,TAU);c.fill()}
+      c.restore()}
+    // thinking: three little thought-dots drift up beside his head, one after another
+    if(this.thinkW.x>.05){c.save();c.globalCompositeOperation='lighter';
+      for(let i=0;i<3;i++){const al=this.thinkW.x*(.3+.7*Math.max(0,Math.sin(T*1.8-i*.9))),dx=r*(.62+i*.2),dy=-r*(.92+i*.2);
+        c.fillStyle=`rgba(${A},${al*.9})`;c.shadowColor=`rgba(${A},1)`;c.shadowBlur=6;c.beginPath();c.arc(dx,dy,Math.max(1.2,r*(.045+i*.022)),0,TAU);c.fill()}c.restore()}
+    // "aha": a bright little star pops above his head when he understands
+    if(this.ahaT>0){const p=1-this.ahaT,pop=p<.25?easeOutBack(p/.25):1,al=p<.7?1:1-(p-.7)/.3;
+      c.save();c.translate(0,-r*1.2);c.globalAlpha*=al;c.shadowColor='rgba(255,226,140,1)';c.shadowBlur=12*Math.max(.6,s);c.fillStyle='#fff6d6';
+      starPath(c,0,0,r*.2*pop,r*.065*pop,4);c.fill();c.strokeStyle=`rgba(255,226,140,${.5*al})`;c.lineWidth=Math.max(1,1.3*s);c.beginPath();c.arc(0,0,r*.2+p*r*.45,0,TAU);c.stroke();c.restore()}
+    c.restore();
+  }
+}
+
+/* ───────── canvases ───────── */
+const bgC=$('bg'),bx=bgC.getContext('2d'),fxC=$('fx'),c=fxC.getContext('2d'),shell=$('shell'),slot=$('slot');
+let W=0,H=0,DPR=1;const stars=Array.from({length:110},()=>({x:Math.random(),y:Math.random(),r:Math.random()*1.2+.25,p:Math.random()*TAU}));
+const N=new Creature();let ptr={x:0,y:0},lastMove=performance.now(),hoverT=0;
+function resize(){DPR=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;
+  for(const k of [bgC,fxC]){k.width=Math.round(W*DPR);k.height=Math.round(H*DPR)}bx.setTransform(DPR,0,0,DPR,0,0);c.setTransform(DPR,0,0,DPR,0,0);
+  if(!ptr.x){ptr.x=W/2;ptr.y=H/2}applyMode()}
+
+/* ═════════════ central state: the single source of truth for the interface ═════════════
+   Everything the UI shows is derived from S (interface) and A (agent activity). */
+const S={
+  mode:'compact',        // notch | compact | activity | expanded | attention
+  lastOpen:'compact',    // where the notch restores to
+  pending:false,         // an unresolved permission request exists
+  base:'idle',           // Nebula's underlying state (playful reactions sit on top of it)
+  note:'',               // short transient message ("Finished src/app.ts")
+  autoMin:5,             // seconds of calm before returning to the notch; 0 = never
+  hoverShell:false,codeBusy:false,inputFocus:false,codeFull:false,
+  idleDeadline:0,noHoverUntil:0,dizzy:false
+};
+const ED={busy:false,phase:'idle',tPause:0,tEnd:0,prev:'idle',t0:0,start:null,end:null,pad:10,lh:19,chw:7.5};
+try{const v=Number(localStorage.getItem('aurora-automin'));if([0,3,5,10,15].includes(v)&&localStorage.getItem('aurora-automin')!==null)S.autoMin=v}catch(e){}
+
+/* ───────── input: geometric hit-test on Nebula (the canvas never captures the mouse) ───────── */
+const hitC=(x,y)=>N.vis>.5&&Math.hypot(x-N.x,y-(N.y+N.by.x))<N.r*1.25;
+let downOnC=false,clicks=[];
+addEventListener('pointermove',e=>{ptr.x=e.clientX;ptr.y=e.clientY;lastMove=performance.now()},{passive:true});
+addEventListener('pointerdown',e=>{downOnC=hitC(e.clientX,e.clientY);audio();if(N.sleepAmt>.5&&downOnC)sfx('wake')});
+addEventListener('pointerup',e=>{if(!(downOnC&&hitC(e.clientX,e.clientY))){downOnC=false;return}downOnC=false;if(S.dizzy)return;
+  const t=performance.now();clicks=clicks.filter(x=>t-x<1400);clicks.push(t);lastMove=t;
+  if(clicks.length>=3){clicks=[];N.dizzy();sfx('dizzy')}else{N.poke();sfx('poke')}});
+
+/* ───────── Nebula state ───────── */
+let timers=[];
+const later=(fn,ms)=>{timers.push(setTimeout(fn,ms))},clearLater=()=>{timers.forEach(clearTimeout);timers=[]};
+function setNebula(s,{quiet=false,keep=false}={}){
+  if(!keep)clearLater();
+  if(s==='dizzy'){N.dizzy();if(!quiet)sfx('dizzy');return sync()}
+  const was=S.base;S.base=s;N.setState(s);
+  if(!quiet&&s!==was){if(s==='attention')sfx('attention');else if(s==='done')sfx('done');else if(s==='working')sfx('working');else if(s==='understood')sfx('aha')}
+  sync()}
+let noteT=0;
+function setNoteExpire(ms){clearTimeout(noteT);noteT=setTimeout(()=>{S.note='';sync()},ms)}
+function statusMsg(){if(S.note)return S.note;if(S.pending)return 'Claude Code needs your OK.';if(A.running)return `${A.agent} · ${A.status}`;return STATES[S.base].msg}
+function indicator(){return S.dizzy?'sad':S.pending?'attention':A.running?'working':['done','happy','understood'].includes(S.base)?'done':['listening','curious','thinking'].includes(S.base)?'listening':S.base==='sad'?'sad':'idle'}
+function sync(){
+  const st=STATES[S.base],msg=statusMsg(),ind=indicator();
+  const lbl=S.dizzy?'Dizzy':st.label;$('cstat').textContent=lbl;$('cmsg').textContent=msg;
+  document.querySelectorAll('[data-bind=stat]').forEach(e=>e.textContent=lbl);document.querySelectorAll('[data-bind=msg]').forEach(e=>e.textContent=msg);
+  $('cact').dataset.k=ind;$('nind').dataset.k=ind;
+  $('nmain').setAttribute('aria-label',S.pending?'Open Aurora, a request needs your OK':'Open Aurora');
+  document.querySelectorAll('#gNeb .p').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===S.base)));
+  document.querySelectorAll('#gMode .p').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===S.mode)));
+  document.querySelectorAll('#gAuto .p').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.dataset.k)===S.autoMin)));
+  $('autoSel').value=String(S.autoMin);document.body.dataset.pending=String(S.pending);
+}
+
+/* ───────── mode machine ─────────
+   w/h/r = capsule size & radius (h:0 = sized by its content, then clamped); sl/st/ss = avatar slot (left, top, size).
+   The shell and the slot animate with the same timing and the canvas reads the slot every frame,
+   so Nebula is always exactly where the capsule says it should be. */
+const GEO={
+  notch:    {w:108,h:56,r:28,sl:8, st:4, ss:48},
+  compact:  {w:352,h:76,r:38,sl:8, st:6, ss:64},
+  activity: {w:396,h:0, r:26,sl:10,st:8, ss:60},
+  expanded: {w:404,h:0, r:28,sl:14,st:12,ss:92},
+  attention:{w:404,h:0, r:26,sl:10,st:9, ss:62}
+};
+const LAYERS={notch:$('notch'),compact:$('compact'),activity:$('activity'),expanded:$('panel'),attention:$('attn')};
+function previewH(){const p=$('preview');return p?p.offsetHeight+16:0}
+function applyMode(){
+  const s=S.mode,G=GEO[s];document.body.dataset.mode=s;shell.dataset.s=s;
+  const w=Math.min(G.w,innerWidth-16);shell.style.setProperty('--w',w+'px');shell.style.width=w+'px';
+  // content-driven height, clamped so Aurora stays shallow and never runs under the test controls
+  let h=G.h;const maxH=Math.max(150,Math.min(innerHeight*.66,innerHeight-previewH()-18));
+  if(!h){const L=LAYERS[s];L.style.maxHeight='';L.style.overflowY='';h=L.offsetHeight;if(h>maxH){h=maxH;L.style.maxHeight=maxH+'px';L.style.overflowY='auto'}}
+  shell.style.height=h+'px';shell.style.borderRadius=Math.min(G.r,h/2)+'px';
+  shell.style.setProperty('--sl',G.sl+'px');shell.style.setProperty('--st',G.st+'px');shell.style.setProperty('--ss',Math.min(G.ss,w-6)+'px');
+  for(const k in LAYERS){const on=k===s;LAYERS[k].inert=!on;LAYERS[k].setAttribute('aria-hidden',String(!on))}   // only the visible layer is focusable
+  sync();
+}
+const fit=()=>requestAnimationFrame(applyMode);
+shell.addEventListener('scroll',()=>{shell.scrollTop=0;shell.scrollLeft=0});
+function setMode(m,{quiet=false}={}){
+  const prev=S.mode;S.mode=m;
+  if(m==='attention'){S.pending=true;setNebula('attention',{quiet});showView('vMain')}
+  else if(!S.pending&&S.base==='attention')setNebula(A.running?'working':'idle',{quiet:true});
+  if(m!=='notch'&&m!=='attention')S.lastOpen=m;
+  if(m==='notch'){S.noHoverUntil=performance.now()+800;S.codeFull=false;renderCards()}           // folding away also folds the code view
+  if(!quiet&&prev!==m&&m!=='attention')sfx(m==='notch'?'close':'open');
+  applyMode();scheduleIdle();
+}
+
+/* ═════════════ auto-minimize (one timer, no per-frame work) ═════════════ */
+let idleT=0,lastBump=0;
+function idleReason(){
+  if(S.mode==='notch')return 'already minimized';
+  if(S.autoMin<=0)return 'turned off';
+  if(S.pending||S.mode==='attention')return 'a request is waiting';
+  if(S.dizzy)return 'dizzy, back in a sec';
+  if(ED.busy)return 'watching you type';
+  if(S.hoverShell)return 'pointer is over Aurora';
+  if(S.inputFocus)return 'editing a setting';
+  if(S.codeBusy)return 'inspecting code';
+  return '';
+}
+function scheduleIdle(){
+  clearTimeout(idleT);idleT=0;S.idleDeadline=0;if(idleReason())return;
+  S.idleDeadline=performance.now()+S.autoMin*1000;
+  idleT=setTimeout(()=>{idleT=0;if(idleReason()){scheduleIdle();return}setMode('notch')},S.autoMin*1000);
+}
+function bump(){const t=performance.now();if(t-lastBump<200)return;lastBump=t;scheduleIdle()}   // meaningful interaction restarts the countdown
+shell.addEventListener('pointerenter',()=>{S.hoverShell=true;scheduleIdle()});
+shell.addEventListener('pointerleave',()=>{S.hoverShell=false;scheduleIdle()});
+['pointerdown','keydown','wheel'].forEach(ev=>shell.addEventListener(ev,bump,{passive:true}));
+shell.addEventListener('focusin',e=>{if(e.target.matches('select,input,textarea'))S.inputFocus=true;if(e.target.matches('pre.code'))S.codeBusy=true;bump()});
+shell.addEventListener('focusout',e=>{if(e.target.matches('select,input,textarea')){S.inputFocus=false;scheduleIdle()}if(e.target.matches('pre.code')){S.codeBusy=false;scheduleIdle()}});
+shell.addEventListener('pointerover',e=>{if(e.target.closest&&e.target.closest('pre.code'))S.codeBusy=true});
+shell.addEventListener('pointerout',e=>{if(e.target.closest&&e.target.closest('pre.code')&&!(e.relatedTarget&&e.relatedTarget.closest&&e.relatedTarget.closest('pre.code'))){S.codeBusy=false;scheduleIdle()}});
+function setAutoMin(v){S.autoMin=v;try{localStorage.setItem('aurora-automin',String(v))}catch(e){}scheduleIdle();sync()}
+$('autoSel').addEventListener('change',e=>setAutoMin(Number(e.target.value)));
+
+/* notch: hover (with a little intent delay) or click restores the last open mode */
+let hoverIntent=0;
+function restore(){setMode(S.pending?'attention':S.lastOpen)}
+$('nmain').addEventListener('pointerenter',()=>{clearTimeout(hoverIntent);hoverIntent=setTimeout(()=>{if(S.mode==='notch'&&performance.now()>S.noHoverUntil)restore()},170)});
+$('nmain').addEventListener('pointerleave',()=>clearTimeout(hoverIntent));
+$('nmain').addEventListener('click',restore);
+const openActivity=()=>setMode(S.pending?'attention':'activity');
+$('nind').addEventListener('click',openActivity);$('cact').addEventListener('click',openActivity);
+$('cmain').addEventListener('click',e=>{if(hitC(e.clientX,e.clientY))return;setMode(S.pending?'attention':'expanded')});   // clicking Nebula itself pokes it
+$('cExpand').addEventListener('click',()=>setMode(S.pending?'attention':'expanded'));
+$('cDismiss').addEventListener('click',()=>setMode('notch'));
+document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.go)));
+$('pReview').addEventListener('click',()=>setMode('attention'));
+$('aFold').addEventListener('click',()=>setMode('compact'));
+document.querySelectorAll('[data-q]').forEach(b=>b.addEventListener('click',()=>{$('qnote').textContent=b.dataset.q+' · demo only, nothing happened.';
+  if(b.dataset.q==='Panic stop'){stopActivity();setNebula('sad',{quiet:true});later(()=>setNebula('idle',{quiet:true,keep:true}),2200)}}));
+addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(S.mode==='attention'||S.mode==='expanded'||S.mode==='activity')setMode('compact');else if(S.mode==='compact')setMode('notch')}
+  const KEYS=['idle','curious','thinking','understood','happy','listening','working','attention','done','sleeping','sad','dizzy'];
+  const ki=e.key==='0'?11:Number(e.key)-1;if(ki>=0&&ki<=11&&/^\d$/.test(e.key)&&!/input|textarea|select/i.test(e.target.tagName))setNebula(KEYS[ki]);
+});
+
+/* ═════════════ coding activity ═════════════
+   Future integration point. The UI only reads A; it never knows where events come from.
+   A supported agent hook or an explicitly authorized integration may call:
+     aurora.dispatch({type:'activity.start',  source, agent, project, file, status, snippet, progress?})
+     aurora.dispatch({type:'activity.update', status?, file?, snippet?, progress?})
+     aurora.dispatch({type:'activity.finish', summary?})
+     aurora.dispatch({type:'activity.stop'})
+     aurora.dispatch({type:'permission.request', risk:'safe|risky|danger|sensitive', agent, project})
+     aurora.dispatch({type:'editor.typing', source})   // the user is typing in an editor they authorized
+     aurora.dispatch({type:'editor.pause',  summary?}) // they paused; Nebula "reads", then reacts
+     aurora.dispatch({type:'editor.end'})
+   Seeing the user's VS Code needs a VS Code extension the user installs and allows; a web page cannot do it.
+   In this prototype only the test controls emit events, always with source:'demo', and the UI says so.
+   Nothing here reads other applications. `progress` is only drawn when an event actually supplies it. */
+const A={running:false,agent:'',project:'',file:'',status:'',progress:null,source:'',snippet:'',typed:0,done:false};
+const SAMPLES=[
+  {agent:'Claude Code',project:'aurora-demo',file:'src/app.ts',status:'Editing file',progress:null,
+    snippet:'function initializeAurora() {\n  return { ready: true };\n}'},
+  {agent:'Claude Code',project:'aurora-demo',file:'src/rules.ts',status:'Writing rule matcher',progress:62,
+    snippet:'// decide what needs a human\nexport function classify(cmd: string) {\n  if (/rm\\s+-rf/.test(cmd)) return "danger";\n  if (/git\\s+push/.test(cmd)) return "risky";\n  if (cmd.endsWith(".env")) return "sensitive";\n  const safe = ["npm test", "ls", "cat"];\n  return safe.includes(cmd) ? "safe" : "ask";\n}'},
+  {agent:'Codex',project:'api-server',file:'tests/invoice.test.ts',status:'Running tests',progress:null,
+    snippet:'import { total } from "../src/invoice";\n\ntest("adds VAT", () => {\n  expect(total([{ price: 100 }])).toBe(120);\n});'}
+];
+let typeT=0,sampleI=0;
+const aurora={dispatch(ev){switch(ev&&ev.type){
+  case 'activity.start':startActivity(ev);break;
+  case 'activity.update':Object.assign(A,{status:ev.status??A.status,file:ev.file??A.file,progress:ev.progress===undefined?A.progress:ev.progress});
+    if(typeof ev.snippet==='string'){A.snippet=ev.snippet;A.typed=0;startTyping()}renderCards();sync();break;
+  case 'activity.finish':finishActivity(ev);break;
+  case 'activity.stop':stopActivity();break;
+  case 'editor.typing':edTyping();break;
+  case 'editor.pause':edPause(ev.summary);break;
+  case 'editor.end':edCancel();break;
+  case 'permission.request':{if(RISK[ev.risk])risk=ev.risk;if(ev.agent)$('reqWho').textContent=`${ev.agent} · ${ev.project||'project'}`;renderRisk();requestPermission();break}
+}}};
+window.aurora=aurora;
+function startActivity(ev){
+  Object.assign(A,{running:true,done:false,agent:ev.agent||'Agent',project:ev.project||'',file:ev.file||'',status:ev.status||'Working',progress:ev.progress??null,source:ev.source||'unknown',snippet:ev.snippet||'',typed:0});
+  S.note='';if(!S.pending)setNebula('working');startTyping();renderCards();sync();fit();
+}
+function startTyping(){
+  clearInterval(typeT);typeT=0;if(S.dizzy){A.resume=true;return}
+  if(RM||!A.snippet){A.typed=A.snippet.length;renderCards();return}
+  typeT=setInterval(()=>{A.typed=Math.min(A.snippet.length,A.typed+2);renderCards();if(A.typed>=A.snippet.length){clearInterval(typeT);typeT=0}},48);
+}
+function finishActivity(ev){
+  clearInterval(typeT);typeT=0;A.typed=A.snippet.length;A.running=false;A.done=true;A.status=(ev&&ev.summary)||'Finished';
+  if(!S.pending)setNebula('done');if(!S.dizzy)S.note=`Finished ${A.file}`;
+  if(S.mode==='notch'&&!S.pending)setMode('compact',{quiet:true});          // brief completion notification
+  renderCards();sync();fit();
+  setNoteExpire(4500);later(()=>{if(S.base==='done'&&!S.pending)setNebula('idle',{quiet:true,keep:true});sync()},4500);
+}
+function stopActivity(){clearInterval(typeT);typeT=0;Object.assign(A,{running:false,done:false,agent:'',file:'',snippet:'',typed:0,progress:null});S.note='';
+  if(!S.pending&&['working','done'].includes(S.base))setNebula('idle',{quiet:true});renderCards();sync();fit()}
+
+/* code preview: tiny syntax styling, truncated by default, expandable on demand */
+function hl(src){
+  const esc=src.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  return esc.replace(/(\/\/.*$)|("[^"]*"|'[^']*'|`[^`]*`)|\b(function|return|const|let|if|else|import|from|export|async|await|new|true|false|null|test|expect)\b|\b(\d+)\b|\b([A-Za-z_]\w*)(?=\()/gm,
+    (m,cm,st,kw,nu,fn)=>cm?`<i class="c">${cm}</i>`:st?`<i class="s">${st}</i>`:kw?`<i class="k">${kw}</i>`:nu?`<i class="n">${nu}</i>`:`<i class="f">${fn}</i>`);
+}
+const MAXLINES=5,cards=[];
+function mountCard(host){
+  host.innerHTML=`<div class="acard" data-run="false"><div class="arow"><span class="chip ag"></span><span class="afile"></span><span class="tag demo">demo</span></div>
+    <div class="astat"><span class="live"></span><span class="atxt"></span><span class="prog"><span></span></span></div>
+    <pre class="code" tabindex="0" aria-label="Code preview"><code></code></pre>
+    <div class="cfoot"><button class="link more" type="button"></button><span class="grow"></span><span class="fnote"></span></div></div>
+    <div class="empty">No agent activity right now.</div>`;
+  const q=s=>host.querySelector(s),r={card:q('.acard'),empty:q('.empty'),ag:q('.ag'),file:q('.afile'),demo:q('.demo'),txt:q('.atxt'),prog:q('.prog'),bar:q('.prog span'),code:q('code'),pre:q('pre'),more:q('.more'),note:q('.fnote'),lines:-1};
+  r.more.addEventListener('click',()=>{S.codeFull=!S.codeFull;renderCards();fit()});cards.push(r);return r;
+}
+document.querySelectorAll('.acard-host').forEach(mountCard);
+function renderCards(){
+  const has=!!A.agent,typed=A.snippet.slice(0,A.typed),all=typed.split('\n'),total=A.snippet.split('\n').length;
+  const view=S.codeFull?all:(A.running?all.slice(-MAXLINES):all.slice(0,MAXLINES));
+  const hidden=Math.max(0,all.length-view.length);
+  const caret=A.running&&A.typed<A.snippet.length?'<span class="caret"></span>':'';
+  for(const r of cards){
+    r.card.style.display=has?'':'none';r.empty.style.display=has?'none':'';if(!has)continue;
+    r.card.dataset.run=String(A.running);r.card.dataset.done=String(A.done);r.card.dataset.full=String(S.codeFull);
+    r.ag.textContent=A.agent;r.file.textContent=[A.project,A.file].filter(Boolean).join(' / ');r.demo.style.display=A.source==='demo'?'':'none';
+    r.txt.textContent=A.running?A.status:(A.done?`✓ ${A.status}`:A.status);
+    r.prog.classList.toggle('on',A.progress!=null);if(A.progress!=null)r.bar.style.width=Math.max(0,Math.min(100,A.progress))+'%';
+    r.code.innerHTML=hl(view.join('\n'))+caret;
+    const canMore=total>MAXLINES||S.codeFull;r.more.style.display=canMore?'':'none';
+    r.more.textContent=S.codeFull?'Show less':(hidden?`Show all ${total} lines`:`Show all ${total} lines`);
+    r.note.textContent=A.source==='demo'?'Example preview · not live':`From ${A.source}`;
+    if(S.codeFull||A.running)r.pre.scrollTop=r.pre.scrollHeight;
+    if(r.lines!==view.length&&S.codeFull){r.lines=view.length;fit()}
+  }
+}
+
+/* ───────── permission request (mock) ───────── */
+const RISK={
+  safe:{label:'Safe',col:'var(--safe)',ico:'<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/>',sum:'Run the tests',cmd:'npm test',det:[['Tool','Bash'],['Folder','~/aurora-demo'],['Matches','read-only check'],['Timeout','120 s']]},
+  risky:{label:'Risky',col:'var(--risky)',ico:'<path d="M12 4l9 16H3L12 4z"/><path d="M12 10v4M12 17h.01"/>',sum:'Push commits to the remote',cmd:'git push origin main',det:[['Tool','Bash'],['Folder','~/aurora-demo'],['Remote','origin → github.com'],['Changes','3 commits']]},
+  danger:{label:'Danger',col:'var(--danger)',ico:'<path d="M8 3h8l5 5v8l-5 5H8l-5-5V8l5-5z"/><path d="M9 9l6 6M15 9l-6 6"/>',sum:'Delete a folder recursively',cmd:'rm -rf ./build',det:[['Tool','Bash'],['Folder','~/aurora-demo'],['Effect','removes 412 files'],['Undo','not possible']]},
+  sensitive:{label:'Sensitive',col:'var(--sensitive)',ico:'<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/>',sum:'Edit a file that may hold secrets',cmd:'Edit  .env   (+3 −1)',det:[['Tool','Edit'],['File','~/aurora-demo/.env'],['Matches','secrets protection'],['Diff','+3 −1 lines']]}
+};
+let risk='risky';const attn=$('attn');
+function renderRisk(){const R=RISK[risk];shell.style.setProperty('--risk',R.col);attn.style.setProperty('--risk',R.col);
+  $('riskIco').innerHTML=R.ico;$('riskTxt').textContent=R.label;$('sum').textContent=R.sum;$('cmd').textContent=R.cmd;$('pendCmd').textContent=R.cmd.replace(/\s+\(.*/,'');
+  $('det').innerHTML=R.det.map(([k,v])=>`<dt>${k}</dt><dd>${v}</dd>`).join('');
+  $('risk').style.setProperty('--risk',R.col);$('cmd').style.setProperty('--risk',R.col);
+  $('ruleCmd').textContent=R.cmd.replace(/\s+\(.*/,'');$('ruleWarn').classList.toggle('on',risk==='danger');$('rOk').textContent=risk==='danger'?'Create rule anyway':'Create rule';
+  document.querySelectorAll('#gRisk [data-k]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.k===risk)));fit()}
+function showView(id){['vMain','vRule'].forEach(v=>$(v).classList.toggle('on',v===id));fit()}
+$('more').addEventListener('click',()=>{const o=$('more').getAttribute('aria-expanded')==='true';$('more').setAttribute('aria-expanded',String(!o));$('det').classList.toggle('on',!o);fit()});
+function requestPermission(){edCancel();S.pending=true;showView('vMain');setMode('attention')}
+function resolve(kind,msg){S.pending=false;S.note=msg||'';setMode('compact',{quiet:true});
+  if(kind==='deny'){sfx('deny');setNebula('sad',{quiet:true});later(()=>setNebula(A.running?'working':'idle',{quiet:true,keep:true}),2800)}
+  else{sfx('allow');setNebula('working',{quiet:true});later(()=>setNebula('done',{keep:true}),1500);later(()=>setNebula(A.running?'working':'idle',{quiet:true,keep:true}),5200)}
+  if(S.note)setNoteExpire(3200);sync()}
+$('bAllow').addEventListener('click',()=>resolve('allow','Allowed once (demo)'));
+$('bDeny').addEventListener('click',()=>resolve('deny','Denied (demo)'));
+$('bAlways').addEventListener('click',()=>showView('vRule'));
+$('rCancel').addEventListener('click',()=>showView('vMain'));
+$('rOk').addEventListener('click',()=>{showView('vMain');resolve('allow','Rule created (demo)')});
+
+/* ═════════════ editor awareness (demo) ═════════════
+   typing → Nebula watches the caret, curious · pause → he "reads" along the line · then a small "aha".
+   The demo box below stands in for VS Code. The "understanding" is a keyword guess, labelled as such, not an AI. */
+const ed=$('ed');
+function edMeasure(){const cs=getComputedStyle(ed);ED.pad=parseFloat(cs.paddingLeft)||10;ED.lh=parseFloat(cs.lineHeight)||19;
+  const cx=document.createElement('canvas').getContext('2d');cx.font=cs.fontSize+' '+cs.fontFamily;ED.chw=cx.measureText('M').width||7.5}
+function caretPoint(){
+  const r=ed.getBoundingClientRect();if(!r.width)return{x:W/2,y:H-10};
+  const before=ed.value.slice(0,ed.selectionStart).split('\n'),line=before.length-1,col=before[line].length;
+  return{x:Math.min(r.left+ED.pad+Math.min(col,70)*ED.chw,r.right-8),y:Math.min(r.top+ED.pad+Math.min(line,2)*ED.lh-ed.scrollTop+ED.lh/2,r.bottom-8)}}
+function guess(t){t=t.trim();if(!t)return 'Nothing yet. I’ll keep watching.';
+  if(/test\(|expect\(|describe\(/.test(t))return 'Looks like a test · demo guess';
+  if(/function\s|=>/.test(t))return 'Looks like a new function · demo guess';
+  if(/TODO|FIXME/.test(t))return 'A TODO to come back to · demo guess';
+  if(/console\.log/.test(t))return 'Debugging with a log? · demo guess';
+  if(/^\s*import\s|require\(/m.test(t))return 'Pulling in a dependency · demo guess';
+  if(/\/\/|\/\*/.test(t))return 'Leaving a note for later · demo guess';
+  return 'Got it · demo guess'}
+function edCancel(){clearTimeout(ED.tPause);clearTimeout(ED.tEnd);ED.busy=false;ED.phase='idle';N.gaze=null;if(S.note&&/type|Reading|demo guess/.test(S.note))S.note='';sync();scheduleIdle()}
+function edTyping(){
+  if(S.dizzy||S.pending||S.mode==='attention')return;
+  if(!ED.busy){ED.busy=true;if(!['curious','thinking','understood'].includes(S.base))ED.prev=S.base;if(S.mode==='notch')setMode('compact',{quiet:true})}
+  ED.phase='typing';S.note='Watching you type…';N.keyTick();if(S.base!=='curious')setNebula('curious',{quiet:true});else sync();
+  clearTimeout(ED.tPause);clearTimeout(ED.tEnd);ED.tPause=setTimeout(()=>edPause(),1100);
+}
+function edPause(summary){
+  if(!ED.busy||S.dizzy||S.pending||ED.phase==='reading'||ED.phase==='understood')return;
+  ED.phase='reading';ED.t0=performance.now();const r=ed.getBoundingClientRect(),end=caretPoint();ED.start={x:(r.width?r.left+ED.pad:end.x-60),y:end.y};ED.end=end;
+  S.note='Reading what you wrote…';setNebula('thinking',{quiet:true});
+  clearTimeout(ED.tEnd);ED.tEnd=setTimeout(()=>edUnderstood(summary),1700);
+}
+function edUnderstood(summary){
+  if(!ED.busy||S.dizzy||S.pending)return;ED.phase='understood';N.gaze=null;S.note=summary||guess(ed.value);setNebula('understood');
+  clearTimeout(ED.tEnd);ED.tEnd=setTimeout(()=>{ED.busy=false;ED.phase='idle';S.note='';
+    const back=A.running?'working':(['attention','curious','thinking','understood'].includes(ED.prev)?'idle':ED.prev);setNebula(back,{quiet:true});sync();scheduleIdle()},3400);
+}
+function edTick(now){
+  if(!ED.busy){N.gaze=null;return}
+  if(ED.phase==='typing')N.gaze=caretPoint();
+  else if(ED.phase==='reading'&&ED.start&&ED.end){const p=clamp((now-ED.t0)/1500,0,1),e=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;N.gaze={x:lerp(ED.start.x,ED.end.x,e),y:ED.end.y}}
+  else N.gaze=null;
+}
+ed.addEventListener('input',()=>aurora.dispatch({type:'editor.typing',source:'demo'}));
+ed.addEventListener('blur',()=>{if(ED.busy&&ED.phase==='typing'){clearTimeout(ED.tPause);edPause()}});
+let autoTyper=0;
+function autoTypeDemo(){clearInterval(autoTyper);ed.value='';const text='function add(a, b) {\n  return a + b;\n}';let i=0;
+  autoTyper=setInterval(()=>{if(i>=text.length){clearInterval(autoTyper);autoTyper=0;return}ed.value+=text[i++];ed.selectionStart=ed.selectionEnd=ed.value.length;ed.scrollTop=ed.scrollHeight;aurora.dispatch({type:'editor.typing',source:'demo'})},90)}
+
+/* dizzy: all other work pauses; he says he'll be right back, then everything resumes */
+const DIZZY_MSG='Dizzy… back in a sec';
+function onDizzyStart(){
+  clearInterval(typeT);typeT=0;A.resume=A.running&&A.typed<A.snippet.length;
+  if(ED.busy)edCancel();
+  S.note=DIZZY_MSG;if(S.mode==='notch')setMode('compact',{quiet:true});sync();scheduleIdle();
+}
+function onDizzyEnd(){
+  if(S.note===DIZZY_MSG)S.note='';
+  if(A.resume){A.resume=false;startTyping()}
+  sync();scheduleIdle();
+}
+/* ───────── test controls ───────── */
+const mk=(parent,k,l,fn)=>{const b=document.createElement('button');b.className='p';b.dataset.k=k;b.textContent=l;b.onclick=()=>{audio();fn(k)};parent.appendChild(b);return b};
+[['notch','Notch'],['compact','Compact'],['activity','Activity'],['expanded','Expanded'],['attention','Permission']].forEach(([k,l])=>mk($('gMode'),k,l,k==='attention'?requestPermission:setMode));
+[['idle','Idle'],['curious','Curious'],['thinking','Thinking'],['understood','Understood'],['happy','Happy'],['listening','Listening'],['working','Working'],['attention','Needs you'],['done','Done'],['sleeping','Sleeping'],['sad','Sad'],['dizzy','Dizzy']].forEach(([k,l])=>mk($('gNeb'),k,l,k=>setNebula(k)));
+Object.keys(RISK).forEach(k=>mk($('gRisk'),k,RISK[k].label,k=>{aurora.dispatch({type:'permission.request',risk:k,agent:'Claude Code',project:'aurora-demo'})}));
+mk($('gRisk'),'sim','Request in 3 s',()=>{setMode('notch');later(()=>aurora.dispatch({type:'permission.request',risk,agent:'Claude Code',project:'aurora-demo'}),3000)});
+const demoStart=()=>aurora.dispatch({type:'activity.start',source:'demo',...SAMPLES[sampleI++%SAMPLES.length]});
+mk($('gAct'),'start','Start',demoStart);
+mk($('gAct'),'next','Next file',()=>A.running?aurora.dispatch({type:'activity.update',...(()=>{const s=SAMPLES[sampleI++%SAMPLES.length];return{status:s.status,file:s.file,snippet:s.snippet,progress:s.progress}})()}):demoStart());
+mk($('gAct'),'finish','Finish',()=>A.agent&&aurora.dispatch({type:'activity.finish'}));
+mk($('gAct'),'stop','Stop',()=>aurora.dispatch({type:'activity.stop'}));
+mk($('gEd'),'auto','Auto-type demo',autoTypeDemo);mk($('gEd'),'clear','Clear',()=>{clearInterval(autoTyper);autoTyper=0;ed.value='';edCancel();setNebula('idle',{quiet:true})});
+[[3,'3 s'],[5,'5 s'],[10,'10 s'],[15,'15 s'],[0,'Never']].forEach(([v,l])=>mk($('gAuto'),v,l,()=>setAutoMin(v)));
+function paintSound(){$('bSound').setAttribute('aria-pressed',String(!AU.muted));$('bSound').textContent=AU.muted?'Sound off':'Sound on'}
+$('bSound').addEventListener('click',()=>{AU.muted=!AU.muted;try{localStorage.setItem('aurora-muted',AU.muted?'1':'0')}catch(e){}paintSound();if(!AU.muted)sfx('wake')});
+let userToggled=false;
+function autoMinPanel(){if(userToggled)return;const m=innerWidth<560||innerHeight<640;$('preview').classList.toggle('min',m);$('bHide').textContent=m?'Show':'Hide';$('bHide').setAttribute('aria-pressed',String(m))}
+$('bHide').addEventListener('click',()=>{userToggled=true;const m=$('preview').classList.toggle('min');$('bHide').textContent=m?'Show':'Hide';$('bHide').setAttribute('aria-pressed',String(m));fit()});
+paintSound();
+// live read-out of the idle countdown (4 Hz, only for the test panel)
+const infoT=setInterval(()=>{if($('preview').classList.contains('min'))return;const rs=idleReason();
+  $('idleInfo').textContent=rs?`idle timer: ${S.autoMin<=0?'off':'paused · '+rs}`:`minimizes in ${Math.max(0,Math.ceil((S.idleDeadline-performance.now())/1000))} s`},250);
+
+/* ───────── main loop ───────── */
+let raf=0,t0=performance.now(),frame=0,skip=0;
+function loop(now){
+  raf=requestAnimationFrame(loop);
+  // a calm, minimized Nebula only needs 30 fps: half the work, same feel
+  if(S.mode==='notch'&&!ED.busy&&!S.hoverShell&&N.hover<.02&&N.dizzyT<=0&&!sparks.length&&!hearts.length){skip^=1;if(skip)return}
+  const dt=Math.min(.05,(now-t0)/1000);t0=now;const T=now/1000;frame++;
+  // 1) read the avatar slot: its on-screen rect IS the creature's home (follows the CSS morph exactly)
+  const sr=slot.getBoundingClientRect(),shr=shell.getBoundingClientRect();
+  N.x=sr.left+sr.width/2;N.y=sr.top+sr.height/2+sr.height*.02;N.r=Math.max(1,sr.width*.37);N.vis=1;
+  // 2) hover → hearts after 2 s (only when big enough to read)
+  const over=hitC(ptr.x,ptr.y)||(S.mode==='notch'&&S.hoverShell);
+  if(over){hoverT+=dt;N.hover+=(1-N.hover)*ease(dt,6);
+    if(hoverT>2&&!RM&&N.r>=24&&Math.random()<dt*2.4){hearts.push({x:N.x+(Math.random()-.5)*N.r*.9,y:N.y-N.r*.85,l:1});sfx('hover')}}
+  else{hoverT=0;N.hover+=(0-N.hover)*ease(dt,6)}
+  edTick(now);N.update(dt,T,ptr,S.base==='idle'&&(now-lastMove)>20000);
+  {const dz=N.dizzyT>0;if(dz!==S.dizzy){S.dizzy=dz;dz?onDizzyStart():onDizzyEnd()}}
+  if(frame%2===0){bx.clearRect(0,0,W,H);for(const st of stars){const a=.28+.72*Math.abs(Math.sin(T*.7*(RM?.2:1)+st.p));bx.fillStyle=`rgba(215,224,255,${a*.7})`;bx.beginPath();bx.arc(st.x*W,st.y*H,st.r,0,TAU);bx.fill()}}
+  // 3) draw Nebula + particles, clipped to the capsule so nothing ever spills outside Aurora
+  c.clearRect(0,0,W,H);
+  if(shr.width>8&&shr.height>8){
+    c.save();c.beginPath();c.roundRect(shr.left+1,shr.top+1,shr.width-2,shr.height-2,Math.max(0,Math.min(shr.height/2,parseFloat(shell.style.borderRadius)||0)-1));c.clip();
+    N.draw(c,T);
+    c.globalCompositeOperation='lighter';
+    for(let i=sparks.length-1;i>=0;i--){const p=sparks[i];p.x+=p.vx;p.y+=p.vy;p.vx*=.97;p.vy=p.vy*.97+.02*p.z;p.l-=dt*1.15;if(p.l<=0){sparks.splice(i,1);continue}
+      const col=`rgba(${p.c},${p.l})`;c.fillStyle=col;c.shadowColor=col;c.shadowBlur=6;starPath(c,p.x,p.y,(3*p.l+1)*p.z,(1.1*p.l+.4)*p.z,4);c.fill()}
+    c.shadowBlur=0;c.globalCompositeOperation='source-over';
+    for(let i=hearts.length-1;i>=0;i--){const h=hearts[i];h.y-=.6;h.l-=dt*.7;if(h.l<=0){hearts.splice(i,1);continue}c.fillStyle=`rgba(255,150,195,${h.l})`;c.font=`${clamp(N.r*.24,9,18)}px system-ui`;c.fillText('✦',h.x,h.y)}
+    c.restore();
+  }
+}
+function start(){cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(loop)}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){cancelAnimationFrame(raf);clearInterval(typeT);typeT=0}
+  else{start();if(A.running&&A.typed<A.snippet.length)startTyping()}});
+addEventListener('pagehide',()=>{clearInterval(autoTyper);clearTimeout(ED.tPause);clearTimeout(ED.tEnd);clearTimeout(noteT);clearInterval(infoT);clearInterval(typeT);clearTimeout(idleT);clearLater()});
+addEventListener('resize',()=>{autoMinPanel();resize()});
+autoMinPanel();edMeasure();resize();renderRisk();renderCards();setNebula('idle',{quiet:true});setMode('compact',{quiet:true});start();
+})();
+</script>
+</body>
+</html>

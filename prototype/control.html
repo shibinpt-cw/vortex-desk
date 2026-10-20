@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Vortex Desk</title>
+<style>
+  :root{--bg:#080a1f;--bg2:#0d1030;--panel:rgba(255,255,255,.045);--panel2:rgba(255,255,255,.075);--line:rgba(176,186,255,.13);--line2:rgba(176,186,255,.24);
+    --ink:#e9ecff;--ink2:#b4bbe6;--ink3:#7d85b8;--violet:#a893ff;--teal:#5fe0d2;--safe:#7cf0b4;--warn:#ffc766;--bad:#ff7fae;
+    --font:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;--mono:Consolas,"Cascadia Mono",monospace;--ease:cubic-bezier(.2,.9,.25,1.15)}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:radial-gradient(120% 90% at 20% -10%,#161a4a 0%,var(--bg) 55%);color:var(--ink);font:13.5px/1.5 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+  button,input,select,textarea{font:inherit;color:inherit}
+  [hidden]{display:none!important}
+  ::-webkit-scrollbar{display:none;width:0;height:0}
+  .app{display:grid;grid-template-columns:232px 1fr;height:100vh}
+  /* sidebar */
+  .side{display:flex;flex-direction:column;gap:4px;padding:18px 12px 14px;border-right:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,0))}
+  .brand{display:flex;align-items:center;gap:11px;padding:2px 8px 16px}.brand img{width:38px;height:38px;border-radius:10px;box-shadow:0 0 22px -4px rgba(150,130,255,.8)}
+  .brand b{display:block;font-size:15px;letter-spacing:.02em}.brand span{font-size:11px;color:var(--ink3)}
+  .nav{display:flex;align-items:center;gap:11px;width:100%;padding:9px 11px;border:0;border-radius:11px;background:none;color:var(--ink2);font-size:13.5px;cursor:pointer;text-align:left;transition:background .2s,color .2s,transform .2s var(--ease)}
+  .nav svg{width:17px;height:17px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.85}
+  .nav:hover{background:var(--panel);color:#fff}.nav[aria-current=page]{background:linear-gradient(135deg,rgba(168,147,255,.26),rgba(95,224,210,.12));color:#fff;box-shadow:inset 0 0 0 1px rgba(168,147,255,.35)}
+  .side .grow{flex:1}.side .small{font-size:11px;color:var(--ink3);padding:6px 10px}
+  /* content */
+  .main{overflow-y:auto;padding:26px 34px 40px;scroll-behavior:smooth}
+  .page{max-width:820px;margin:0 auto;animation:in .35s var(--ease)}@keyframes in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  h1{font-size:23px;margin:0 0 3px;letter-spacing:.01em}.lead{margin:0 0 20px;color:var(--ink3)}
+  h2{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin:26px 0 9px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+  .stat{display:flex;flex-direction:column;gap:5px}.stat .k{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3)}.stat .v{font-size:15px;font-weight:600}.stat .n{font-size:12px;color:var(--ink3)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ink3);margin-right:7px;vertical-align:1px}.dot.ok{background:var(--safe);box-shadow:0 0 9px var(--safe)}.dot.warn{background:var(--warn);box-shadow:0 0 9px var(--warn)}.dot.bad{background:var(--bad);box-shadow:0 0 9px var(--bad)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:46px;padding:8px 14px;border-radius:13px;background:var(--panel);border:1px solid var(--line);margin-bottom:7px}
+  .row .t{flex:1;min-width:0}.row .t b{font-weight:600;font-size:13.5px}.row .t small{display:block;color:var(--ink3);font-size:12px;line-height:1.35;margin-top:1px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:32px;padding:0 15px;border:1px solid var(--line2);border-radius:999px;background:var(--panel2);color:var(--ink);font-size:12.5px;font-weight:600;cursor:pointer;transition:transform .2s var(--ease),background .2s,box-shadow .25s}
+  .btn:hover{background:rgba(168,147,255,.22);transform:translateY(-1px)}.btn:active{transform:scale(.96)}.btn:disabled{opacity:.45;pointer-events:none}
+  .btn.pri{background:linear-gradient(135deg,#a893ff,#5fe0d2);color:#0a0b22;border:0;box-shadow:0 8px 20px -8px rgba(168,147,255,.8)}.btn.pri:hover{box-shadow:0 12px 26px -8px rgba(168,147,255,.95);background:linear-gradient(135deg,#b8a6ff,#78eadd)}
+  .btn.bad{border-color:rgba(255,127,174,.45);color:#ffc0d6}.btn.bad:hover{background:rgba(255,127,174,.2)}
+  .btn.sm{height:28px;padding:0 11px;font-size:12px}
+  .seg{display:inline-flex;gap:2px;padding:2px;border-radius:11px;background:rgba(0,0,0,.34);border:1px solid var(--line)}.seg button{height:26px;padding:0 12px;border:0;border-radius:9px;background:none;color:var(--ink2);font-size:12.5px;cursor:pointer}.seg button:hover{color:#fff}.seg button[aria-pressed=true]{background:rgba(168,147,255,.38);color:#fff}
+  .sw{position:relative;width:42px;height:24px;border-radius:999px;border:1px solid var(--line2);background:rgba(0,0,0,.4);cursor:pointer;transition:background .25s,border-color .25s;flex:none}.sw::after{content:"";position:absolute;left:3px;top:3px;width:16px;height:16px;border-radius:50%;background:var(--ink2);transition:transform .3s var(--ease),background .25s}
+  .sw[aria-checked=true]{background:linear-gradient(135deg,rgba(168,147,255,.7),rgba(95,224,210,.55));border-color:transparent}.sw[aria-checked=true]::after{transform:translateX(18px);background:#fff}
+  input[type=text],input[type=password],select,textarea{height:32px;min-width:0;padding:0 12px;border-radius:10px;border:1px solid var(--line2);background:rgba(0,0,0,.34);outline:0;transition:border-color .2s,box-shadow .2s}
+  textarea{height:auto;padding:8px 12px;resize:none}
+  input:focus,select:focus,textarea:focus{border-color:rgba(168,147,255,.8);box-shadow:0 0 0 3px rgba(168,147,255,.15)}
+  select option,select optgroup{background:#12142e}
+  .grow1{flex:1}.right{display:flex;align-items:center;gap:8px}
+  .pill{display:inline-block;padding:1px 9px;border-radius:999px;font-size:11px;font-weight:600;background:var(--panel2);color:var(--ink2)}.pill.ok{background:rgba(124,240,180,.15);color:var(--safe)}.pill.warn{background:rgba(255,199,102,.15);color:var(--warn)}.pill.bad{background:rgba(255,127,174,.15);color:var(--bad)}
+  /* engines */
+  .engines{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .eng{position:relative;text-align:left;padding:13px 15px;border-radius:15px;border:1px solid var(--line);background:var(--panel);cursor:pointer;transition:transform .2s var(--ease),border-color .2s,background .2s}
+  .eng:hover{transform:translateY(-2px);border-color:var(--line2)}.eng[aria-pressed=true]{border-color:rgba(168,147,255,.8);background:linear-gradient(135deg,rgba(168,147,255,.2),rgba(95,224,210,.08));box-shadow:0 0 0 3px rgba(168,147,255,.12)}
+  .eng b{display:block;font-size:14px}.eng small{display:block;color:var(--ink3);font-size:12px;margin-top:3px}.eng .tag{position:absolute;right:12px;top:12px}
+  /* chats */
+  .split{display:grid;grid-template-columns:260px 1fr;gap:12px;min-height:330px}
+  .list{display:flex;flex-direction:column;gap:5px;max-height:420px;overflow-y:auto}
+  .li{display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:11px;border:1px solid transparent;background:var(--panel);cursor:pointer;transition:background .2s}
+  .li:hover{background:var(--panel2)}.li[aria-selected=true]{border-color:rgba(168,147,255,.55);background:rgba(168,147,255,.16)}.li .tt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.li small{color:var(--ink3);font-size:11px}
+  .msgs{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow-y:auto;padding:4px 2px}
+  .m{max-width:84%;padding:8px 12px;border-radius:14px;font-size:13px;white-space:pre-wrap;word-break:break-word}.m.you{align-self:flex-end;background:linear-gradient(135deg,rgba(168,147,255,.3),rgba(95,224,210,.16));border-bottom-right-radius:4px}.m.neb{align-self:flex-start;background:var(--panel2);border-bottom-left-radius:4px}
+  .m small{display:block;margin-top:3px;color:var(--ink3);font-size:10.5px}
+  .mem{display:flex;align-items:center;gap:10px;padding:7px 12px;border-radius:11px;background:var(--panel);margin-bottom:6px}.mem span{flex:1;min-width:0}.x{border:0;background:none;color:var(--ink3);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:7px}.x:hover{color:#fff;background:rgba(255,127,174,.25)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}th{text-align:left;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);padding:6px 10px;font-weight:600}td{padding:8px 10px;border-top:1px solid var(--line)}td code{font-family:var(--mono);font-size:12px;color:#cdbfff}
+  .hk{display:inline-block;padding:1px 8px;border-radius:7px;border:1px solid var(--line2);background:rgba(255,255,255,.07);font:600 11.5px var(--mono)}
+  .note{color:var(--ink3);font-size:12px;margin:6px 2px}
+  .toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);padding:9px 18px;border-radius:999px;background:rgba(18,20,52,.96);border:1px solid var(--line2);box-shadow:0 14px 34px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .25s,transform .35s var(--ease);font-size:13px;z-index:20}.toast.on{opacity:1;transform:translate(-50%,0)}
+  .empty{padding:26px;text-align:center;color:var(--ink3)}
+  @media (max-width:860px){.app{grid-template-columns:70px 1fr}.nav span,.brand div,.side .small{display:none}.engines{grid-template-columns:1fr}.split{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand"><img id="logo" alt=""><div><b>Vortex Desk</b><span>with Lumina</span></div></div>
+    <button class="nav" data-p="home"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 01-1 1h-4v-6H9v6H5a1 1 0 01-1-1z"/></svg><span>Overview</span></button>
+    <button class="nav" data-p="voice"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg><span>Voice</span></button>
+    <button class="nav" data-p="keys"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg><span>Models &amp; keys</span></button>
+    <button class="nav" data-p="chats"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg><span>Chats &amp; memory</span></button>
+    <button class="nav" data-p="corner"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 6.1L20 10l-4.6 3.6L17 20l-5-3.4L7 20l1.6-6.4L4 10l5.8-.9z"/></svg><span>Lumina’s corner</span></button>
+    <button class="nav" data-p="dictate"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/><path d="M19 14v6M16 17h6"/></svg><span>Dictation</span></button>
+    <button class="nav" data-p="agents"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg><span>Agents &amp; rules</span></button>
+    <button class="nav" data-p="computer"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>Computer control</span></button>
+    <button class="nav" data-p="behave"><svg viewBox="0 0 24 24"><path d="M5 7h9M18 7h1M5 17h1M10 17h9"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg><span>Behaviour</span></button>
+    <button class="nav" data-p="about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>About</span></button>
+    <div class="grow"></div>
+    <div class="small">Ctrl+Alt+D opens this window.<br>Ctrl+Alt+Space talks to Lumina.</div>
+    <button class="nav" id="quit"><svg viewBox="0 0 24 24"><path d="M12 3v8M6.5 6.5a8 8 0 1011 0"/></svg><span>Quit Vortex Desk</span></button>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(()=>{
+'use strict';
+const $=id=>document.getElementById(id);
+const get=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const set=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const json=(k,d)=>{try{const j=JSON.parse(get(k));return j==null?d:j}catch(e){return d}};
+const el=(t,a={},...kids)=>{const e=document.createElement(t);for(const k in a){if(k==='class')e.className=a[k];else if(k.startsWith('on'))e.addEventListener(k.slice(2),a[k]);else if(a[k]===true)e.setAttribute(k,'');else if(a[k]!==false&&a[k]!=null)e.setAttribute(k,a[k])}
+  for(const c of kids.flat())if(c!=null&&c!==false)e.appendChild(typeof c==='string'?document.createTextNode(c):c);return e};
+let toastT=0;const toast=m=>{const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('on'),2600)};
+const ago=t=>{const m=Math.round((Date.now()-t)/60000);return m<1?'just now':m<60?m+' min ago':m<1440?Math.round(m/60)+' h ago':Math.round(m/1440)+' d ago'};
+const switchEl=(on,fn)=>{const b=el('button',{class:'sw',role:'switch','aria-checked':String(!!on),type:'button',onclick:()=>{const v=b.getAttribute('aria-checked')!=='true';b.setAttribute('aria-checked',String(v));fn(v)}});return b};
+const segEl=(opts,cur,fn)=>{const d=el('div',{class:'seg',role:'group'});for(const [v,l] of opts){const b=el('button',{type:'button','aria-pressed':String(String(v)===String(cur)),onclick:()=>{[...d.children].forEach(x=>x.setAttribute('aria-pressed','false'));b.setAttribute('aria-pressed','true');fn(v)}},l);d.appendChild(b)}return d};
+const row=(title,sub,control)=>el('div',{class:'row'},el('div',{class:'t'},el('b',{},title),sub?el('small',{},sub):null),el('div',{class:'right'},control));
+
+/* ───────── data shared with the island (same stored settings) ───────── */
+const MODELS=[['claude-sonnet','Claude Sonnet','claude'],['claude-opus','Claude Opus','claude'],['claude-haiku','Claude Haiku','claude'],['gpt','GPT','openai'],['gemini-pro','Gemini Pro','gemini'],['gemini-flash','Gemini Flash','gemini'],['router-auto','OpenRouter Auto','openrouter'],['local','Local model','local']];
+const GEM_VOICES=['Aoede','Leda','Kore','Zephyr','Sulafat','Achernar','Despina','Callirrhoe'];
+const EDGE_VOICES=[['en-US-AvaMultilingualNeural','Ava (many languages)'],['en-US-EmmaMultilingualNeural','Emma (many languages)'],['en-US-AriaNeural','Aria'],['en-US-JennyNeural','Jenny'],['en-US-MichelleNeural','Michelle'],['en-GB-SoniaNeural','Sonia (British)'],['en-AU-NatashaNeural','Natasha (Australian)'],['en-IN-NeerjaNeural','Neerja (Indian English)'],['hi-IN-SwaraNeural','Swara (Hindi)']];
+let KEYS={};
+
+/* ───────── pages ───────── */
+const pages={};
+function badge(txt,kind){return el('span',{class:'pill '+(kind||'')},txt)}
+
+pages.home=async()=>{
+  const st=json('vortex-status',{}),hook=await ctl.hook('status'),rules=await ctl.rules(),chats=json('vortex-chats',{list:[]}).list||[],mem=json('vortex-memory',[]);
+  KEYS=await ctl.keys();
+  const stat=(k,v,n,kind)=>el('div',{class:'card stat'},el('div',{class:'k'},k),el('div',{class:'v'},el('span',{class:'dot '+(kind||'')}),v),el('div',{class:'n'},n));
+  return el('div',{class:'page'},
+    el('h1',{},'Overview'),el('p',{class:'lead'},'Everything about Lumina, in one place.'),
+    el('div',{class:'right',style:'margin-bottom:18px'},
+      el('button',{class:'btn pri',onclick:()=>ctl.island('show')},'Show Lumina'),
+      el('button',{class:'btn',onclick:()=>ctl.island('talk')},'Talk to her'),
+      el('button',{class:'btn',onclick:()=>ctl.island('hide')},'Hide her'),
+      el('button',{class:'btn',onclick:()=>ctl.showcase()},'Make the showcase video')),
+    el('div',{class:'grid'},
+      stat('Her voice',st.voice||'not used yet','Change it under Voice.',/Gemini|Microsoft/.test(st.voice||'')?'ok':'warn'),
+      stat('Gemini',KEYS.gemini&&KEYS.gemini.set?'Key saved':'No key yet',KEYS.gemini&&KEYS.gemini.set?'Chat and voice can use it.':'Add it under Models & keys.',KEYS.gemini&&KEYS.gemini.set?'ok':'bad'),
+      stat('Claude Code hook',hook.ok&&hook.installed?'Installed':'Not installed',hook.ok&&hook.installed?'She sees Claude work and asks before it acts.':'Install it under Agents & rules.',hook.ok&&hook.installed?'ok':'warn'),
+      stat('Memory',mem.length?mem.length+' things':'Nothing yet','Lasting facts she picked up about you.',mem.length?'ok':''),
+      stat('Chats',chats.length+(chats.length===1?' chat':' chats'),'Saved on this computer.',chats.length?'ok':''),
+      stat('Rules',rules.rules.length+(rules.rules.length===1?' rule':' rules'),rules.auto?'Safe, read-only actions are auto-allowed.':'Every action asks you first.',''))
+    );
+};
+
+/* voice */
+pages.voice=async()=>{
+  KEYS=await ctl.keys();
+  const cur=get('vortex-voice')||'';
+  const kind=cur.startsWith('gemini:')?'gemini':cur.startsWith('edge:')?'edge':cur?'system':'auto';
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Voice'),el('p',{class:'lead'},'How Lumina sounds. The best available voice is used automatically.'));
+  const voiceRow=el('div'),testBox=el('div');
+  const choose=(k,val)=>{set('vortex-voice',val);pages.voice.render()};
+  const engines=[
+    ['auto','Automatic','Gemini when it has free requests left, then the Microsoft neural voice, then the system voice.',''],
+    ['gemini','Gemini voice','Human, many languages. The free key has a daily limit.',KEYS.gemini.set?'':'needs a key'],
+    ['edge','Microsoft neural','Free, natural, no key or limit. Needs the internet.',''],
+    ['system','System voice','Offline, but robotic.','']];
+  const grid=el('div',{class:'engines'});
+  for(const [k,t,d,tag] of engines){grid.append(el('button',{class:'eng',type:'button','aria-pressed':String(k===kind),onclick:()=>choose(k,k==='auto'?'':k==='gemini'?'gemini:'+(cur.startsWith('gemini:')?cur.slice(7):'Aoede'):k==='edge'?'edge:'+(cur.startsWith('edge:')?cur.slice(5):'en-US-AvaMultilingualNeural'):(speechSynthesis.getVoices().find(v=>/zira|hazel|susan|female/i.test(v.name))||speechSynthesis.getVoices()[0]||{name:'system'}).name)},el('b',{},t),el('small',{},d),tag?el('span',{class:'tag pill warn'},tag):null))}
+  page.append(grid);
+  // the voice list for the chosen engine
+  if(kind==='gemini'||kind==='edge'||kind==='system'){
+    const sel=el('select',{style:'min-width:240px',onchange:e=>{set('vortex-voice',(kind==='gemini'?'gemini:':kind==='edge'?'edge:':'')+e.target.value);toast('Voice changed.')}});
+    const list=kind==='gemini'?GEM_VOICES.map(v=>[v,v]):kind==='edge'?EDGE_VOICES:speechSynthesis.getVoices().map(v=>[v.name,v.name.replace(/^Microsoft /,'')]);
+    const curv=cur.replace(/^(gemini|edge):/,'');
+    for(const [v,l] of list)sel.append(el('option',{value:v,selected:v===curv},l));
+    page.append(el('h2',{},'Which voice'),row(kind==='gemini'?'Gemini voice':kind==='edge'?'Microsoft voice':'System voice',kind==='gemini'?'Aoede is the one you picked.':'',sel));
+  }
+  // play a sample
+  const txt=el('input',{type:'text',class:'grow1',value:'Hi! I am Lumina. What are we building today?',style:'min-width:260px'});
+  const status=el('div',{class:'note'},'');
+  const play=el('button',{class:'btn pri',type:'button',onclick:async()=>{
+    play.disabled=true;status.textContent='Making the voice…';
+    try{const ctx=new AudioContext();let buf,used;
+      const v=get('vortex-voice')||'';const want=v.startsWith('gemini:')?['gemini','edge']:v.startsWith('edge:')?['edge','gemini']:v?['system']:['gemini','edge'];
+      for(const e of want){try{
+        if(e==='gemini'){if(!KEYS.gemini.set)throw new Error('no key');const r=await ctl.ttsGemini(txt.value,v.startsWith('gemini:')?v.slice(7):'Aoede');buf=decodeSpeech(ctx,r);used='Gemini ('+r.model+')';break}
+        if(e==='edge'){const u8=await ctl.ttsEdge(txt.value,v.startsWith('edge:')?v.slice(5):'en-US-AvaMultilingualNeural');buf=await ctx.decodeAudioData(u8.buffer.slice(u8.byteOffset,u8.byteOffset+u8.byteLength));used='Microsoft neural';break}
+      }catch(err){status.textContent=(e==='gemini'?'Gemini: ':'Microsoft: ')+String(err.message).replace(/^Error invoking remote method '[^']+': Error: /,'')+' — trying the next one…'}}
+      if(buf){const s=ctx.createBufferSource();s.buffer=buf;s.connect(ctx.destination);s.start();status.textContent='Playing with '+used+'.'}
+      else{const u=new SpeechSynthesisUtterance(txt.value);const sv=speechSynthesis.getVoices().find(x=>x.name===v)||speechSynthesis.getVoices().find(x=>/hazel|susan|zira/i.test(x.name));if(sv)u.voice=sv;speechSynthesis.cancel();setTimeout(()=>speechSynthesis.speak(u),80);status.textContent='Playing with the system voice.'}
+    }catch(err){status.textContent='Could not play: '+err.message}
+    play.disabled=false}},'Play a sample');
+  page.append(el('h2',{},'Try it'),el('div',{class:'card'},el('div',{class:'right'},txt,play),status));
+  page.append(el('p',{class:'note'},'Gemini’s free key only allows a small number of voice replies per day. When it runs out, Lumina switches to the Microsoft neural voice by herself and tries Gemini again later. Turning on billing for your Google AI key lifts the limit.'));
+  return page;
+};
+function decodeSpeech(ctx,r){
+  const u=r.data,len=u.length,dv=new DataView(u.buffer,u.byteOffset,u.byteLength);let rate=Number((/rate=(\d+)/.exec(r.mime||'')||[])[1])||24000,off=0,chs=1;
+  if(len>44&&u[0]===82&&u[1]===73&&u[2]===70&&u[3]===70){rate=dv.getUint32(24,true);chs=dv.getUint16(22,true)||1;off=12;while(off+8<=len){const id=String.fromCharCode(u[off],u[off+1],u[off+2],u[off+3]),sz=dv.getUint32(off+4,true);if(id==='data'){off+=8;break}off+=8+sz}}
+  const n=Math.floor((len-off)/2/chs),buf=ctx.createBuffer(1,n,rate),ch=buf.getChannelData(0);for(let i=0;i<n;i++)ch[i]=dv.getInt16(off+i*2*chs,true)/32768;return buf}
+
+/* models & keys */
+pages.keys=async()=>{
+  KEYS=await ctl.keys();
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Models & keys'),el('p',{class:'lead'},'Paste a key, press Save. Keys are stored on this computer only and never shown again.'));
+  const provs=[['gemini','Gemini','Google AI Studio key. Gives Lumina her brain, her eyes and her voice.'],['claude','Claude','Anthropic key. Chat with Claude models.'],['openai','OpenAI','OpenAI key. Chat with GPT models.'],['deepseek','DeepSeek','DeepSeek key.'],['qwen','Qwen','Alibaba Qwen (DashScope) key.'],['moonshot','Moonshot','Moonshot (Kimi) key.'],['openrouter','OpenRouter','One key for hundreds of models.']];
+  for(const [p,name,desc] of provs){
+    const inp=el('input',{type:'password',placeholder:KEYS[p].set?'Saved '+KEYS[p].tail+'. Paste a new key to replace it':'Paste your key here',style:'width:260px',autocomplete:'off',spellcheck:'false'});
+    const test=el('button',{class:'btn sm',type:'button',disabled:!KEYS[p].set&&true,onclick:async()=>{test.disabled=true;const r=await ctl.testKey(p,inp.value.trim());toast(name+': '+r.msg);test.disabled=false}},'Test');
+    const save=el('button',{class:'btn sm pri',type:'button',onclick:async()=>{const v=inp.value.trim();if(!v){toast('Paste a key first.');return}const r=await ctl.testKey(p,v);await ctl.setKey(p,v);toast(name+': '+(r.ok?'saved. '+r.msg:'saved, but '+r.msg));pages.keys.render()}},'Save');
+    const rm=el('button',{class:'btn sm bad',type:'button',disabled:!KEYS[p].set,onclick:async()=>{await ctl.setKey(p,'');toast(name+' key removed.');pages.keys.render()}},'Remove');
+    page.append(el('div',{class:'row'},el('div',{class:'t'},el('b',{},name+' '),badge(KEYS[p].set?'saved '+KEYS[p].tail:'no key',KEYS[p].set?'ok':''),el('small',{},desc)),el('div',{class:'right'},inp,save,test,rm)));
+  }
+  for(const [p,name,ph,desc] of [['local','Ollama','http://localhost:11434','Runs models on this computer. Start Ollama, then Save the address.'],['lmstudio','LM Studio','http://localhost:1234/v1','Runs models on this computer. Start its local server, then Save the address.']]){
+    const inp=el('input',{type:'text',value:KEYS[p]||ph,style:'width:260px',spellcheck:'false'});
+    page.append(el('div',{class:'row'},el('div',{class:'t'},el('b',{},name),el('small',{},desc)),el('div',{class:'right'},inp,el('button',{class:'btn sm pri',type:'button',onclick:async()=>{await ctl.setKey(p,inp.value.trim());toast(name+' address saved.')}},'Save'))))}
+  const cur=get('vortex-model')||'claude-sonnet';
+  const sel=el('select',{onchange:e=>{set('vortex-model',e.target.value);toast('Default model changed.')}});
+  for(const [id,nm,pv] of MODELS)sel.append(el('option',{value:id,selected:id===cur},nm+(pv==='local'||(KEYS[pv]&&KEYS[pv].set)?'':'  (no key)')));
+  page.append(el('h2',{},'Default model'),row('Chat model','Lumina falls back to Gemini Flash when the chosen model has no key.',sel));
+  page.append(el('p',{class:'note'},'Saved in: '+KEYS.file));
+  return page;
+};
+
+/* chats & memory */
+let selChat=null;
+pages.chats=async()=>{
+  const data=json('vortex-chats',{cur:null,list:[]}),list=(data.list||[]).filter(c=>c.msgs&&c.msgs.length);
+  if(!list.find(c=>c.id===selChat))selChat=list[0]?list[0].id:null;
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Chats & memory'),el('p',{class:'lead'},'Everything Lumina remembers, and every conversation you had with her.'));
+  const L=el('div',{class:'list'}),M=el('div',{class:'msgs'});
+  if(!list.length)L.append(el('div',{class:'empty'},'No chats yet.'));
+  for(const c of list){L.append(el('div',{class:'li',role:'button',tabindex:'0','aria-selected':String(c.id===selChat),onclick:()=>{selChat=c.id;pages.chats.render()}},el('span',{class:'tt'},c.title),el('small',{},ago(c.t))))}
+  const c=list.find(x=>x.id===selChat);
+  const tools=el('div',{class:'right',style:'margin-bottom:8px'});
+  if(c){for(const m of c.msgs)M.append(el('div',{class:'m '+(m.who==='you'?'you':'neb')},m.text,m.att?el('small',{},'with '+m.att):null,m.who==='neb'&&m.model?el('small',{},m.model):null));
+    tools.append(el('button',{class:'btn sm',type:'button',onclick:()=>{navigator.clipboard.writeText(c.msgs.map(m=>(m.who==='you'?'You: ':'Lumina: ')+m.text).join('\n\n'));toast('Copied.')}},'Copy chat'),
+      el('button',{class:'btn sm bad',type:'button',onclick:()=>{const d=json('vortex-chats',{cur:null,list:[]});d.list=d.list.filter(x=>x.id!==c.id);if(d.cur===c.id)d.cur=null;set('vortex-chats',JSON.stringify(d));selChat=null;toast('Chat deleted.');pages.chats.render()}},'Delete chat'))}
+  page.append(el('div',{class:'split'},L,el('div',{},tools,M)));
+  // memory
+  const mem=json('vortex-memory',[]);
+  page.append(el('h2',{},'What she remembers about you'));
+  const box=el('div');
+  if(!mem.length)box.append(el('div',{class:'note'},'Nothing yet. Tell her something about yourself and she will keep it.'));
+  mem.forEach((m,i)=>box.append(el('div',{class:'mem'},el('span',{},m),el('button',{class:'x',type:'button',title:'Forget this','aria-label':'Forget this',onclick:()=>{const a=json('vortex-memory',[]);a.splice(i,1);set('vortex-memory',JSON.stringify(a));pages.chats.render()}},'×'))));
+  const add=el('input',{type:'text',placeholder:'Add something for her to remember…',class:'grow1'});
+  const addBtn=el('button',{class:'btn sm pri',type:'button',onclick:()=>{const v=add.value.trim();if(!v)return;const a=json('vortex-memory',[]);a.push(v.slice(0,160));set('vortex-memory',JSON.stringify(a));pages.chats.render()}},'Add');
+  add.addEventListener('keydown',e=>{if(e.key==='Enter')addBtn.click()});
+  let sure=false;const clr=el('button',{class:'btn sm bad',type:'button',disabled:!mem.length,onclick:()=>{if(!sure){sure=true;clr.textContent='Really forget everything?';setTimeout(()=>{sure=false;clr.textContent='Forget everything'},3500);return}set('vortex-memory','[]');pages.chats.render()}},'Forget everything');
+  page.append(box,el('div',{class:'right',style:'margin-top:8px'},add,addBtn,clr));
+  return page;
+};
+
+/* Lumina's corner: her ideas notebook, the story of what you build together, and what her heart has learned */
+function listBlock(title,key,empty,placeholder,dated,newestFirst){
+  const wrap=el('div'),box=el('div');
+  const load=()=>json(key,[]);
+  const items=load();
+  if(!items.length)box.append(el('div',{class:'note'},empty));
+  const order=items.map((x,i)=>[x,i]);if(newestFirst)order.reverse();
+  for(const [x,i] of order)box.append(el('div',{class:'mem'},el('span',{},x.text,dated?el('small',{style:'display:block;color:var(--ink3);font-size:11px'},new Date(x.t).toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'})):null),
+    el('button',{class:'x',type:'button',title:'Remove','aria-label':'Remove',onclick:()=>{const a=load();a.splice(i,1);set(key,JSON.stringify(a));pages.corner.render()}},'×')));
+  const add=el('input',{type:'text',placeholder,class:'grow1'});
+  const btn=el('button',{class:'btn sm pri',type:'button',onclick:()=>{const v=add.value.trim();if(!v)return;const a=load();a.push({t:Date.now(),text:v.slice(0,200)});set(key,JSON.stringify(a));pages.corner.render()}},'Add');
+  add.addEventListener('keydown',e=>{if(e.key==='Enter')btn.click()});
+  wrap.append(el('h2',{},title),box,el('div',{class:'right',style:'margin-top:8px'},add,btn));return wrap}
+pages.corner=async()=>{
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Lumina’s corner'),el('p',{class:'lead'},'What she keeps for you. It all stays on this computer, so the history you make together belongs to you alone.'),
+    el('div',{class:'right',style:'margin-bottom:6px'},el('button',{class:'btn pri',type:'button',onclick:()=>ctl.stars()},'Open the star window'),el('span',{class:'note'},'A tiny window of stars to keep beside your code.')));
+  page.append(listBlock('Design ideas','vortex-ideas','No ideas yet. Tell her “save that idea” or add one here.','A design idea to keep…',true,true));
+  page.append(listBlock('The story of what you built together','vortex-story','The story starts when an agent finishes something or you decide something together.','Add a line to the story…',true,true));
+  page.append(listBlock('What her heart has learned about how you create','vortex-taste','She learns it from how you talk about your work. You can add things too.','How you like to create…',false,false));
+  page.append(el('p',{class:'note'},'Her memory of you (name, preferences) is under Chats & memory.'));
+  return page;
+};
+
+/* dictation: hold the right Ctrl key anywhere, speak, let go */
+pages.dictate=async()=>{
+  const D=Object.assign({on:true,style:'natural',names:[],repl:[],snips:[]},json('vortex-dict',{}));const save=()=>set('vortex-dict',JSON.stringify(D));
+  const st=json('vortex-dictstats',{words:0,count:0,secs:0,saved:0,days:{}});
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Dictation'),el('p',{class:'lead'},'Hold the right Ctrl key in any app, speak, and let go: your words are typed where your cursor is. Esc cancels. Ctrl+Alt+P types the last one again.'));
+  page.append(row('Dictation is on','Lumina listens only while you hold the key. The recording goes to Gemini to be written down and is never saved.',switchEl(D.on,v=>{D.on=v;save()})),
+    row('How it is written','As said keeps every word. Natural tidies it up like a careful typist. Polished fixes the grammar too.',segEl([['verbatim','As said'],['natural','Natural'],['polished','Polished']],D.style,v=>{D.style=v;save()})));
+  const stat=(k,v)=>el('div',{class:'card stat'},el('div',{class:'k'},k),el('div',{class:'v'},v));
+  const mins=Math.round(st.saved/60),days=Object.keys(st.days).sort();let streak=0;{const d=new Date();while(st.days[d.toISOString().slice(0,10)]){streak++;d.setDate(d.getDate()-1)}}
+  page.append(el('h2',{},'Your numbers'),el('div',{class:'grid'},stat('Words dictated',String(st.words)),stat('Time saved',mins<1?'less than a minute':mins+' min'),stat('Speed',st.secs>5?Math.round(st.words/(st.secs/60))+' words/min':'—'),stat('Days in a row',String(streak))));
+  const two=(title,help,key,aPh,bPh)=>{const w=el('div'),box=el('div');
+    D[key].forEach((x,i)=>box.append(el('div',{class:'mem'},el('span',{},x[0]+'  →  '+x[1]),el('button',{class:'x',type:'button','aria-label':'Remove',onclick:()=>{D[key].splice(i,1);save();pages.dictate.render()}},'×'))));
+    const a=el('input',{type:'text',placeholder:aPh,class:'grow1'}),b=el('input',{type:'text',placeholder:bPh,class:'grow1'});
+    const add=el('button',{class:'btn sm pri',type:'button',onclick:()=>{if(!a.value.trim()||!b.value.trim())return;D[key].push([a.value.trim(),b.value.trim()]);save();pages.dictate.render()}},'Add');
+    w.append(el('h2',{},title),el('p',{class:'note'},help),box,el('div',{class:'right',style:'margin-top:8px'},a,b,add));return w};
+  const nm=el('div'),nbox=el('div');D.names.forEach((x,i)=>nbox.append(el('div',{class:'mem'},el('span',{},x),el('button',{class:'x',type:'button','aria-label':'Remove',onclick:()=>{D.names.splice(i,1);save();pages.dictate.render()}},'×'))));
+  const ni=el('input',{type:'text',placeholder:'A name or word to always spell right…',class:'grow1'});const nb=el('button',{class:'btn sm pri',type:'button',onclick:()=>{const v=ni.value.trim();if(!v)return;D.names.push(v);save();pages.dictate.render()}},'Add');
+  nm.append(el('h2',{},'Names she always spells right'),nbox,el('div',{class:'right',style:'margin-top:8px'},ni,nb));
+  page.append(nm,two('Replacements','When you say the first one, the second one is written.','repl','When I say…','write…'),two('Snippets','Say a short phrase on its own and a whole text is typed.','snips','Say…','Type this text…'));
+  return page;
+};
+
+/* agents & rules */
+pages.agents=async()=>{
+  const hook=await ctl.hook('status'),r=await ctl.rules();
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'Agents & rules'),el('p',{class:'lead'},'Lumina watches your coding agents and asks you before they do anything that matters.'));
+  const inst=hook.ok&&hook.installed;
+  const hb=el('button',{class:'btn '+(inst?'bad':'pri'),type:'button',onclick:async()=>{hb.disabled=true;const res=await ctl.hook(inst?'remove':'install');toast(res.ok?(inst?'Hook removed. Restart Claude Code to apply.':'Hook installed. Restart Claude Code sessions to pick it up.'):'Could not change it: '+res.error);pages.agents.render()}},inst?'Remove the hook':'Install the hook');
+  page.append(el('h2',{},'Claude Code'),el('div',{class:'row'},el('div',{class:'t'},el('b',{},'Claude Code hook '),badge(inst?'installed':'not installed',inst?'ok':'warn'),el('small',{},'Lets Lumina see what Claude is doing and answer its permission questions. It edits '+(hook.file||'your Claude Code settings')+' and saves a backup first. If Vortex Desk is not running, Claude Code behaves exactly as normal.')),el('div',{class:'right'},hb)));
+  const ag=await ctl.agents();
+  page.append(el('h2',{},'Other agents'),el('p',{class:'note'},'Press Connect and Vortex Desk adds its hook to that agent’s settings file (a backup is saved first, and nothing of theirs is touched). Restart the agent afterwards.'));
+  for(const a of ag.list.filter(x=>x.id!=='claude-code')){
+    const plug=a.how==='plugin',auto=a.how==='auto';
+    const btn=el('button',{class:'btn sm '+(a.installed?'bad':'pri'),type:'button',disabled:plug||auto,onclick:async()=>{btn.disabled=true;const r=await ctl.agentSet(a.id,!a.installed);toast(r.ok?(a.installed?a.name+' disconnected.':a.name+' connected. Restart it to start watching.'):'Could not change it: '+r.error);pages.agents.render()}},plug?'Coming soon':auto?'Automatic':a.installed?'Disconnect':'Connect');
+    page.append(el('div',{class:'row'},el('div',{class:'t'},el('b',{},a.name+' '),badge(a.installed?'connected':plug?'plugin, coming':auto?'automatic':'not connected',a.installed?'ok':''),el('small',{},a.note||(a.file?a.file:''))),el('div',{class:'right'},btn)))}
+  page.append(el('div',{class:'row'},el('div',{class:'t'},el('b',{},'Any other tool'),el('small',{},'Anything that can run a command on an event can show up here. Use this command and give it its own name:')),el('div',{class:'right'},el('code',{style:'font-size:11.5px;color:#cdbfff;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'},ag.command),el('button',{class:'btn sm',type:'button',onclick:()=>{navigator.clipboard.writeText(ag.command);toast('Copied.')}},'Copy'))));
+  page.append(el('h2',{},'Automatic decisions'),row('Allow safe, read-only actions automatically','Reading files, searching, git status, running tests. Everything else asks you.',switchEl(r.auto,async v=>{await ctl.ruleAuto(v);toast(v?'Safe actions are allowed automatically.':'Every action will ask you.')})));
+  page.append(el('h2',{},'Your rules'));
+  if(!r.rules.length)page.append(el('div',{class:'card empty'},'No rules yet. Press “Always allow” on one of Lumina’s questions to create one.'));
+  else{const tb=el('table',{},el('thead',{},el('tr',{},...['Tool','When it matches','Where','Decision',''].map(h=>el('th',{},h)))));const body=el('tbody');
+    r.rules.forEach((x,i)=>body.append(el('tr',{},el('td',{},x.tool),el('td',{},el('code',{},x.pattern)),el('td',{},x.scope==='everywhere'?'everywhere':(x.project||'project')),el('td',{},badge(x.decision,x.decision==='allow'?'ok':'bad')),el('td',{},el('button',{class:'x',type:'button',title:'Delete this rule','aria-label':'Delete this rule',onclick:async()=>{await ctl.ruleDelete(i);toast('Rule deleted.');pages.agents.render()}},'×')))));
+    tb.append(body);page.append(el('div',{class:'card',style:'padding:6px 8px'},tb))}
+  page.append(el('p',{class:'note'},'Dangerous actions (deleting folders, force-pushing, secrets) always ask, even when a broader rule exists.'));
+  return page;
+};
+
+/* behaviour */
+pages.behave=async()=>{
+  const login=await ctl.login();
+  const page=el('div',{class:'page'});
+  const am=Number(get('vortex-automin')??5);
+  page.append(el('h1',{},'Behaviour'),el('p',{class:'lead'},'How Lumina behaves day to day. Changes apply to her straight away.'));
+  page.append(el('h2',{},'The island'),
+    row('Fold into the notch after','When you are not using her.',segEl([[3,'3 s'],[5,'5 s'],[10,'10 s'],[15,'15 s'],[0,'Never']],am,v=>set('vortex-automin',String(v)))),
+    row('Open when I hover the notch','',switchEl(get('vortex-hoveropen')!=='0',v=>set('vortex-hoveropen',v?'1':'0'))),
+    row('Start with Windows','Lumina is there when you sit down.',switchEl(login,async v=>{await ctl.login(v);toast(v?'She will start with Windows.':'She will not start with Windows.')})));
+  page.append(el('h2',{},'Voice'),
+    row('Speak her replies out loud','Typed answers too.',switchEl(get('vortex-speak')==='1'||get('vortex-speak')===null,v=>set('vortex-speak',v?'1':'0'))));
+  page.append(el('h2',{},'Privacy'),
+    row('She sees which app I am in','Only the app’s name, and only on this PC. Lets her notice coding, music or a video.',switchEl(get('vortex-see')!=='0',v=>set('vortex-see',v?'1':'0'))),
+    row('Share the window title when I chat','Sent to Gemini together with your message. Off by default.',switchEl(get('vortex-titles')==='1',v=>set('vortex-titles',v?'1':'0'))));
+  page.append(el('h2',{},'Companion mode'),
+    row('Lumina watches my screen and helps','She notices if you are in a class, shows what you are writing and points out errors with a fix. The picture goes to Gemini only while this is on, and is never saved.',switchEl(get('vortex-assist')==='1',v=>set('vortex-assist',v?'1':'0'))),
+    row('Meeting & class listener','She hears the other people in a call or class (the sound from your speakers) and stays quiet. She tells you if someone asks you something. The sound goes to Gemini only while this is on.',switchEl(get('vortex-meet')==='1',v=>set('vortex-meet',v?'1':'0'))),
+    row('Look every','Ctrl+Alt+L looks right now.',segEl([[30,'30 s'],[60,'1 min'],[120,'2 min'],[300,'5 min']],Number(get('vortex-assist-every')||60),v=>set('vortex-assist-every',String(v)))),
+    row('Look right now','',el('button',{class:'btn sm',type:'button',onclick:()=>ctl.island('look')},'Look now')));
+  return page;
+};
+
+/* computer control: Lumina opens apps, clicks and types for you, and tidies the folders you allow */
+pages.computer=async()=>{
+  const c=await ctl.computer(),quick=await ctl.computerQuick(),log=await ctl.computerLog();
+  const page=el('div',{class:'page'}),save=async patch=>{Object.assign(c,patch);await ctl.computerSet(c)};
+  page.append(el('h1',{},'Computer control'),el('p',{class:'lead'},'Ask Lumina to open an app, send a message or tidy a folder, in any language. She looks at your screen, does one careful step at a time and checks the result before the next.'));
+  page.append(el('h2',{},'Permission'),
+    row('Let Lumina use my computer','Off by default. While she works, the screen is sent to Gemini one picture per step. Press Esc or Stop at any time and she stops.',switchEl(c.on,async v=>{await save({on:v});toast(v?'Computer control is on.':'Computer control is off.')})),
+    row('Ask me before anything permanent','Sending a message or email, buying, posting, submitting a form, moving files. Strongly recommended.',switchEl(c.confirm,async v=>{await save({confirm:v});toast(v?'She will ask first.':'She will not ask before sending. Be careful.')})));
+  page.append(el('h2',{},'Folders she may organise'),el('p',{class:'note'},'She can list, create and move files only inside these folders. She never deletes anything and never overwrites a file.'));
+  const list=el('div');
+  const draw=()=>{list.replaceChildren(...(c.folders.length?c.folders.map((f,i)=>row(f,'',el('button',{class:'btn sm bad',type:'button',onclick:async()=>{c.folders.splice(i,1);await ctl.computerSet(c);draw()}},'Remove'))):[el('div',{class:'card empty'},'No folders yet, so she cannot touch any files.')]))};draw();page.append(list);
+  const add=async p=>{if(!p||c.folders.includes(p))return;c.folders.push(p);await ctl.computerSet(c);draw()};
+  page.append(el('div',{class:'row'},el('div',{class:'t'},el('b',{},'Add a folder')),el('div',{class:'right'},...quick.map(q=>el('button',{class:'btn sm',type:'button',onclick:()=>add(q.path)},q.name)),el('button',{class:'btn sm pri',type:'button',onclick:async()=>add(await ctl.computerPick())},'Choose…'))));
+  page.append(el('h2',{},'What she did lately'));
+  page.append(log.length?el('div',{class:'card'},el('pre',{style:'margin:0;white-space:pre-wrap;font-size:11.5px;color:var(--mute,#9aa)'},log.join('\n'))):el('div',{class:'card empty'},'Nothing yet.'));
+  page.append(el('p',{class:'note'},'Try: “Lumi, open WhatsApp”, “send hi to Siyad on WhatsApp”, “make a folder called Photos on my desktop”, “close yourself”. Passwords are never typed, and keys such as Alt+F4 and Delete are blocked.'));
+  return page;
+};
+
+/* about */
+pages.about=async()=>{
+  const a=await ctl.about();
+  const page=el('div',{class:'page'});
+  page.append(el('h1',{},'About'),el('p',{class:'lead'},'Vortex Desk '+a.version+' · Electron '+a.electron+' · Chrome '+a.chrome));
+  const open=(w,l)=>el('button',{class:'btn sm',type:'button',onclick:()=>ctl.open(w)},l);
+  page.append(el('h2',{},'Folders'),
+    row('Project','Everything Vortex Desk is made of.',open('project','Open')),
+    row('Keys and config','config/keys.local.json',open('config','Open')),
+    row('Her data','Rules, the hook channel and saved keys.',open('data','Open')),
+    row('Logo and icons','',open('assets','Open')));
+  page.append(el('h2',{},'Shortcuts'),
+    row('Hold to talk, let go to send',null,el('span',{},el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' (hold)')),
+    row('Talk hands-free',null,el('span',{},el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' (tap)  or  ',el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' + ',el('span',{class:'hk'},'Space'))),
+    row('Look at my screen now',null,el('span',{},el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' + ',el('span',{class:'hk'},'L'))),
+    row('Open this window',null,el('span',{},el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' + ',el('span',{class:'hk'},'D'))),
+    row('Quit Vortex Desk',null,el('span',{},el('span',{class:'hk'},'Ctrl'),' + ',el('span',{class:'hk'},'Alt'),' + ',el('span',{class:'hk'},'Shift'),' + ',el('span',{class:'hk'},'Q'))));
+  page.append(el('p',{class:'note'},'Right-click the island for a quick menu. The tray icon (bottom right) opens this window too.'));
+  return page;
+};
+
+/* ───────── shell ───────── */
+let current='home';
+async function show(p){
+  current=pages[p]?p:'home';
+  document.querySelectorAll('.nav[data-p]').forEach(b=>b.setAttribute('aria-current',b.dataset.p===current?'page':'false'));
+  const main=$('main'),top=main.scrollTop;
+  const node=await pages[current]();
+  main.replaceChildren(node);main.scrollTop=top;
+  try{history.replaceState(null,'','#'+current)}catch(e){}
+}
+for(const k of Object.keys(pages))pages[k].render=()=>show(k);
+document.querySelectorAll('.nav[data-p]').forEach(b=>b.addEventListener('click',()=>{$('main').scrollTop=0;show(b.dataset.p)}));
+$('quit').addEventListener('click',()=>ctl.quit());
+addEventListener('storage',e=>{if(!e.key||!e.key.startsWith('vortex-'))return;if(['home','chats','voice','corner','dictate'].includes(current)&&!document.activeElement.matches('input,select,textarea'))show(current)});
+ctl.onGoto(p=>show(p));
+speechSynthesis.getVoices();speechSynthesis.onvoiceschanged=()=>{if(current==='voice')show('voice')};
+$('logo').src='__LOGO__';
+show((location.hash||'#home').slice(1));
+})();
+</script>
+</body>
+</html>

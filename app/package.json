@@ -1,0 +1,23 @@
+{
+  "name": "vortex-desk",
+  "productName": "Vortex Desk",
+  "version": "0.1.0",
+  "description": "Vortex Desk: a notch-style companion (Lumina) for watching and controlling coding agents.",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "sync": "node scripts/sync-ui.js",
+    "start": "node scripts/sync-ui.js && electron .",
+    "test": "node scripts/test-core.js && node scripts/test-agents.js && node scripts/test-chat-providers.js",
+    "hook:preview": "node scripts/install-hook.js",
+    "hook:install": "node scripts/install-hook.js --apply",
+    "hook:remove": "node scripts/install-hook.js --remove"
+  },
+  "devDependencies": {
+    "electron": "latest"
+  },
+  "dependencies": {
+    "koffi": "^3.3.3",
+    "msedge-tts": "^2.1.0"
+  }
+}
